@@ -41,8 +41,9 @@ Generate the best possible cash contest lineups from the user's available player
 - **GameBlazers** (gameblazers.com) is a fantasy golf platform where users collect player cards with salaries and multipliers (1.0–1.5). Each week, users enter contests by building lineups from their card collection.
 - **Roster export**: GameBlazers provides a CSV export with columns: Player, Positions, Team, Multiplier, Overall, Franchise, Rookie, Tradeable, Salary, Collection, Status, Expires.
 - **Overall column**: Used by GameBlazers for the RUC card-burning system only — irrelevant to lineup optimization.
-- **Salary $0 cards**: Some cards have $0 salary (player not in tournament field or card not activated). These may need to be filtered or flagged.
-- **Duplicate player cards**: The same player can appear multiple times with different multipliers and salaries — each card is distinct and treated independently.
+- **Franchise / Rookie columns**: Boolean flags only — not collection types, no optimizer constraints needed.
+- **Salary $0 cards**: Indicate player is not in the tournament field this week — must be excluded from optimization.
+- **Duplicate player cards**: The same player can appear multiple times with different multipliers and salaries — each card is a distinct optimizer variable. However, a golfer may only appear once per lineup regardless of how many cards are owned.
 - **Two current contests**:
   - **The Tips** (cash): 6 golfers, salary $30,000–$64,000, max 3 Weekly Collection cards, max 6 Core cards, 3 entries
   - **The Intermediate Tee** (non-cash, pack/credit prizes): 5 golfers, salary $20,000–$52,000, max 2 Weekly Collection cards, max 5 Core cards, 2 entries
@@ -66,6 +67,8 @@ Generate the best possible cash contest lineups from the user's available player
 | Python backend for optimization | PuLP/OR-Tools handle ILP (integer linear programming) constraints cleanly | — Pending |
 | Cash contest optimized first | Maximize prize money; non-cash lineups use leftover cards | — Pending |
 | Cards locked per lineup | GameBlazers rule — same card cannot appear in multiple lineup entries | — Pending |
+| One golfer per lineup | GameBlazers rule — same golfer may only appear once per lineup regardless of how many cards owned | — Pending |
+| Franchise/Rookie are flags only | Confirmed with user — not collection types, no ILP constraints needed | ✓ Good |
 
 ---
-*Last updated: 2026-03-13 after initialization*
+*Last updated: 2026-03-13 after clarifications*
