@@ -1,0 +1,26 @@
+{
+  "contests": [
+    {
+      "name": "The Tips",
+      "salary_min": 30000,
+      "salary_max": 64000,
+      "roster_size": 6,
+      "max_entries": 3,
+      "collection_limits": {
+        "Weekly Collection": 3,
+        "Core": 6
+      }
+    },
+    {
+      "name": "The Intermediate Tee",
+      "salary_min": 20000,
+      "salary_max": 52000,
+      "roster_size": 5,
+      "max_entries": 2,
+      "collection_limits": {
+        "Weekly Collection": 2,
+        "Core": 5
+      }
+    }
+  ]
+}
