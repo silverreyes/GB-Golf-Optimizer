@@ -7,8 +7,8 @@
 
 ### Upload
 
-- [ ] **UPLD-01**: User can upload a GameBlazers roster CSV export (columns: Player, Positions, Team, Multiplier, Overall, Franchise, Rookie, Tradeable, Salary, Collection, Status, Expires)
-- [ ] **UPLD-02**: User can upload a weekly projections CSV containing player name and projected fantasy score
+- [x] **UPLD-01**: User can upload a GameBlazers roster CSV export (columns: Player, Positions, Team, Multiplier, Overall, Franchise, Rookie, Tradeable, Salary, Collection, Status, Expires)
+- [x] **UPLD-02**: User can upload a weekly projections CSV containing player name and projected fantasy score
 
 ### Optimization
 
@@ -16,15 +16,15 @@
 - [ ] **OPT-02**: Optimizer generates 2 optimal lineups for The Intermediate Tee contest (5 golfers per lineup, salary $20,000–$52,000, max 2 Weekly Collection cards, max 5 Core cards)
 - [ ] **OPT-03**: Cash contest (The Tips) is fully optimized first; Intermediate Tee lineups are built using only cards not already assigned to Tips lineups
 - [ ] **OPT-04**: Each card may appear in at most one lineup across all contests (cards are locked per lineup)
-- [ ] **OPT-05**: Effective card value is calculated as projected_score × multiplier
+- [x] **OPT-05**: Effective card value is calculated as projected_score × multiplier
 - [ ] **OPT-06**: Optimizer respects both the salary floor (minimum) and salary cap (maximum) for each contest
-- [ ] **OPT-07**: Contest parameters (salary cap, salary floor, roster size, max entries, collection limits) are stored in an editable JSON config file
+- [x] **OPT-07**: Contest parameters (salary cap, salary floor, roster size, max entries, collection limits) are stored in an editable JSON config file
 
 ### Data Integrity
 
-- [ ] **DATA-01**: Cards with $0 salary are automatically excluded from optimization (not in tournament field)
-- [ ] **DATA-02**: App surfaces a report of roster players with no matching projection so the user can identify data gaps
-- [ ] **DATA-03**: Cards past their Expires date are automatically excluded from optimization
+- [x] **DATA-01**: Cards with $0 salary are automatically excluded from optimization (not in tournament field)
+- [x] **DATA-02**: App surfaces a report of roster players with no matching projection so the user can identify data gaps
+- [x] **DATA-03**: Cards past their Expires date are automatically excluded from optimization
 
 ### Display
 
@@ -68,18 +68,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| UPLD-01 | Phase 1 | Pending |
-| UPLD-02 | Phase 1 | Pending |
+| UPLD-01 | Phase 1 | Complete |
+| UPLD-02 | Phase 1 | Complete |
 | OPT-01 | Phase 2 | Pending |
 | OPT-02 | Phase 2 | Pending |
 | OPT-03 | Phase 2 | Pending |
 | OPT-04 | Phase 2 | Pending |
-| OPT-05 | Phase 1 | Pending |
+| OPT-05 | Phase 1 | Complete |
 | OPT-06 | Phase 2 | Pending |
-| OPT-07 | Phase 1 | Pending |
-| DATA-01 | Phase 1 | Pending |
-| DATA-02 | Phase 1 | Pending |
-| DATA-03 | Phase 1 | Pending |
+| OPT-07 | Phase 1 | Complete |
+| DATA-01 | Phase 1 | Complete |
+| DATA-02 | Phase 1 | Complete |
+| DATA-03 | Phase 1 | Complete |
 | DISP-01 | Phase 3 | Pending |
 | DISP-02 | Phase 3 | Pending |
 | DEPL-01 | Phase 3 | Pending |
