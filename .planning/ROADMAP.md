@@ -44,11 +44,12 @@ Plans:
   2. Optimizer generates 2 Intermediate Tee lineups (5 golfers each) using only cards not assigned to any Tips lineup
   3. No card appears in more than one lineup across all contests
   4. Optimizer returns a clear infeasibility message (not a crash) when constraints cannot be satisfied with the available card pool
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 02-01: TBD
-- [ ] 02-02: TBD
+- [ ] 02-01-PLAN.md — Wave 0 scaffold: PuLP dependency, optimizer module skeleton (Lineup/OptimizationResult dataclasses, stubs), 10 failing test stubs
+- [ ] 02-02-PLAN.md — ILP engine: implement _solve_one_lineup with roster size, salary range, collection limit, and same-player constraints using PuLP+CBC
+- [ ] 02-03-PLAN.md — Sequential orchestrator: implement optimize() driving sequential solves across contests with pool mutation, partial results, and infeasibility notices
 
 ### Phase 3: Web Application and Deployment
 **Goal**: Users interact with the optimizer through a browser -- upload files, trigger optimization, and view lineups -- on a live server
@@ -73,7 +74,7 @@ Phases execute in numeric order: 1 -> 2 -> 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Data Foundation | 4/4 | Complete   | 2026-03-13 |
-| 2. Optimization Engine | 0/0 | Not started | - |
+| 2. Optimization Engine | 0/3 | Not started | - |
 | 3. Web Application and Deployment | 0/0 | Not started | - |
 
 ---
