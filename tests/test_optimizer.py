@@ -1,13 +1,17 @@
-"""Failing test stubs for the optimizer module (RED baseline).
+"""Tests for the optimizer module.
 
-Each test calls optimize() which raises NotImplementedError — this causes
-each test to fail with an ERROR status (not a collection failure). This is
-the expected RED state for TDD. Do NOT suppress the NotImplementedError.
+Covers:
+- Tips lineup count and constraints
+- Intermediate Tee lineup count
+- Card reuse and uniqueness (composite key deduplication)
+- Infeasibility handling
+- Lock/exclude behavioral tests (ConstraintSet integration)
 """
 from datetime import date
 from gbgolf.data.models import Card
 from gbgolf.data.config import ContestConfig
 from gbgolf.optimizer import optimize, OptimizationResult, Lineup
+from gbgolf.optimizer.constraints import ConstraintSet
 
 
 # ---------------------------------------------------------------------------
@@ -152,34 +156,34 @@ def test_intermediate_lineup_count():
 # ---------------------------------------------------------------------------
 
 def test_no_card_reuse_across_contests():
-    """Card ids used in Tips lineups are disjoint from card ids used in Intermediate Tee lineups."""
+    """Card composite keys used in Tips lineups are disjoint from those in Intermediate Tee lineups."""
     result = optimize(ALL_CARDS, ALL_CONTESTS)
-    tips_ids = {
-        id(card)
+    tips_keys = {
+        (card.player, card.salary, card.multiplier, card.collection)
         for lineup in result.lineups.get("The Tips", [])
         for card in lineup.cards
     }
-    inter_ids = {
-        id(card)
+    inter_keys = {
+        (card.player, card.salary, card.multiplier, card.collection)
         for lineup in result.lineups.get("The Intermediate Tee", [])
         for card in lineup.cards
     }
-    overlap = tips_ids & inter_ids
+    overlap = tips_keys & inter_keys
     assert not overlap, f"Cards reused across contests: {len(overlap)} card(s)"
 
 
 def test_card_uniqueness_all_lineups():
-    """No card (by id()) appears in more than one lineup across all contests."""
+    """No card (by composite key) appears in more than one lineup across all contests."""
     result = optimize(ALL_CARDS, ALL_CONTESTS)
-    seen_ids: set = set()
+    seen_keys: set = set()
     for contest_name, lineups in result.lineups.items():
         for lineup in lineups:
             for card in lineup.cards:
-                card_id = id(card)
-                assert card_id not in seen_ids, (
+                card_key = (card.player, card.salary, card.multiplier, card.collection)
+                assert card_key not in seen_keys, (
                     f"Card '{card.player}' reused in {contest_name}"
                 )
-                seen_ids.add(card_id)
+                seen_keys.add(card_key)
 
 
 # ---------------------------------------------------------------------------
@@ -225,3 +229,104 @@ def test_partial_results():
     result = optimize(cards, config)
     assert len(result.lineups["The Tips"]) == 2
     assert len(result.infeasibility_notices) == 1
+
+
+# ---------------------------------------------------------------------------
+# Tests: Lock and exclude behavioral tests (ConstraintSet integration)
+# ---------------------------------------------------------------------------
+
+def test_card_lock_forces_card_into_lineup():
+    """Locking Scottie Scheffler's card forces him into lineup 1 of The Tips."""
+    scheffler_key = ("Scottie Scheffler", 12000, 1.5, "Core")
+    cs = ConstraintSet(locked_cards=[scheffler_key])
+    result = optimize(TIPS_CARDS, TIPS_CONFIG, constraints=cs)
+    assert len(result.lineups["The Tips"]) >= 1, "Expected at least one lineup"
+    lineup_1_players = [c.player for c in result.lineups["The Tips"][0].cards]
+    assert "Scottie Scheffler" in lineup_1_players, (
+        f"Scheffler not in lineup 1: {lineup_1_players}"
+    )
+
+
+def test_golfer_lock_fires_once():
+    """Golfer lock fires in lineup 1 only; lineup 2 completes without infeasibility."""
+    # Use a small pool where each player has exactly one card
+    # Lock Jon Rahm — he has one card at salary 8500
+    cs = ConstraintSet(locked_golfers=["Jon Rahm"])
+    result = optimize(TIPS_CARDS, TIPS_CONFIG, constraints=cs)
+    # Jon Rahm should appear in lineup 1
+    lineup_1_players = [c.player for c in result.lineups["The Tips"][0].cards]
+    assert "Jon Rahm" in lineup_1_players, (
+        f"Jon Rahm not in lineup 1: {lineup_1_players}"
+    )
+    # Lineup 2 should also build successfully (no infeasibility from golfer lock)
+    assert len(result.lineups["The Tips"]) >= 2, (
+        "Expected at least 2 lineups; golfer lock should not cause infeasibility in lineup 2"
+    )
+    assert not result.infeasibility_notices, (
+        f"Unexpected infeasibility notices: {result.infeasibility_notices}"
+    )
+
+
+def test_exclude_card_absent_from_all_lineups():
+    """An excluded card key never appears in any lineup."""
+    scheffler_key = ("Scottie Scheffler", 12000, 1.5, "Core")
+    cs = ConstraintSet(excluded_cards=[scheffler_key])
+    result = optimize(TIPS_CARDS, TIPS_CONFIG, constraints=cs)
+    for lineup in result.lineups.get("The Tips", []):
+        lineup_keys = [
+            (c.player, c.salary, c.multiplier, c.collection)
+            for c in lineup.cards
+        ]
+        assert scheffler_key not in lineup_keys, (
+            f"Excluded card {scheffler_key} found in lineup: {lineup_keys}"
+        )
+
+
+def test_exclude_golfer_absent_from_all_lineups():
+    """Excluding 'Scottie Scheffler' by name means no Scheffler card appears in any lineup."""
+    cs = ConstraintSet(excluded_players=["Scottie Scheffler"])
+    result = optimize(TIPS_CARDS, TIPS_CONFIG, constraints=cs)
+    for lineup in result.lineups.get("The Tips", []):
+        players = [c.player for c in lineup.cards]
+        assert "Scottie Scheffler" not in players, (
+            f"Excluded player Scottie Scheffler found in lineup: {players}"
+        )
+
+
+def test_conflict_returns_error_not_lineups():
+    """Locking and excluding the same player returns infeasibility_notices with no lineups built."""
+    scheffler_key = ("Scottie Scheffler", 12000, 1.5, "Core")
+    cs = ConstraintSet(
+        locked_cards=[scheffler_key],
+        excluded_cards=[scheffler_key],
+    )
+    result = optimize(TIPS_CARDS, TIPS_CONFIG, constraints=cs)
+    # All contests should have empty lineup lists
+    for contest_lineups in result.lineups.values():
+        assert contest_lineups == [], (
+            f"Expected no lineups on conflict, got: {contest_lineups}"
+        )
+    assert len(result.infeasibility_notices) > 0, "Expected infeasibility notice for conflict"
+
+
+def test_presolve_salary_error_returns_no_lineups():
+    """Locking two cards summing above salary_max returns infeasibility_notices with no lineups."""
+    # Two cards with salaries 40000 + 30000 = 70000 > 64000 (salary_max)
+    card_a = make_card("Big Contract A", 40000, 1.0, "Core", 80.0)
+    card_b = make_card("Big Contract B", 30000, 1.0, "Core", 75.0)
+    all_cards = TIPS_CARDS + [card_a, card_b]
+    key_a = ("Big Contract A", 40000, 1.0, "Core")
+    key_b = ("Big Contract B", 30000, 1.0, "Core")
+    cs = ConstraintSet(locked_cards=[key_a, key_b])
+    result = optimize(all_cards, TIPS_CONFIG, constraints=cs)
+    # All contests should have empty lineup lists
+    for contest_lineups in result.lineups.values():
+        assert contest_lineups == [], (
+            f"Expected no lineups on salary pre-solve error, got: {contest_lineups}"
+        )
+    assert len(result.infeasibility_notices) > 0, "Expected salary infeasibility notice"
+    # Notice should mention the salary amounts
+    notice_text = " ".join(result.infeasibility_notices)
+    assert "70,000" in notice_text or "salary" in notice_text.lower(), (
+        f"Expected salary info in notice: {notice_text}"
+    )
