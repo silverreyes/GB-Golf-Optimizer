@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Manual Lock/Exclude
 status: completed
-stopped_at: Completed 06-03-PLAN.md
-last_updated: "2026-03-14T19:45:26.363Z"
+stopped_at: Phase 7 context gathered
+last_updated: "2026-03-14T20:02:15.370Z"
 last_activity: "2026-03-14 — Plan 06-03 complete: 3 UI-03 tests GREEN; Lock column in lineup tables with 🔒 icon via Jinja2 set membership"
 progress:
   total_phases: 4
@@ -71,6 +71,6 @@ None — Phase 4 multi-lineup lock semantics resolved via fires-once tracking.
 
 ## Session Continuity
 
-Last session: 2026-03-14T18:34:11.290Z
-Stopped at: Completed 06-03-PLAN.md
-Resume file: None
+Last session: 2026-03-14T20:02:15.367Z
+Stopped at: Phase 7 context gathered
+Resume file: .planning/phases/07-polish/07-CONTEXT.md
