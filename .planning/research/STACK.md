@@ -1,219 +1,189 @@
-# Technology Stack
+# Stack Research
 
-**Project:** GB Golf Optimizer
-**Researched:** 2026-03-13
-**Confidence note:** WebSearch and WebFetch were unavailable during research. Versions and recommendations are based on training data (cutoff May 2025). All libraries recommended here are mature and stable -- unlikely to have breaking changes, but exact latest versions should be confirmed via `pip index versions <package>` before installing.
+**Domain:** Manual lock/exclude additions to Flask + PuLP ILP optimizer (v1.1)
+**Researched:** 2026-03-14
+**Confidence:** HIGH
+
+## Scope
+
+This is a SUBSEQUENT MILESTONE research file. It covers ONLY what is needed to add manual lock/exclude to the existing validated stack (Flask, PuLP/CBC, Pydantic v2, Jinja2/HTML/CSS, session-based CSV upload flow). The question is: what changes or additions does the stack need?
+
+**Answer: None. No new dependencies.**
+
+All three feature areas resolve entirely within the existing stack.
+
+---
 
 ## Recommended Stack
 
-### Runtime
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| Python | 3.12+ | Backend language | Required for PuLP/optimization; 3.12 is stable and widely deployed. Avoid 3.13 unless confirmed stable on target VPS. |
+### Core Technologies (existing — no changes)
 
-### Web Framework
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| FastAPI | ~0.115+ | HTTP API + file upload handling | Async by default, built-in file upload via `UploadFile`, automatic OpenAPI docs, type validation with Pydantic. For this project's scope Flask would also work, but FastAPI's `UploadFile` handling and automatic request validation reduce boilerplate. |
-| Uvicorn | ~0.30+ | ASGI server | Standard production server for FastAPI. Use `--workers 2` on KVM 2 (2 vCPU). |
-| Jinja2 | ~3.1+ | HTML templating | FastAPI supports Jinja2 templates natively. Renders server-side HTML -- no need for a JS framework for this app's complexity level. |
-| python-multipart | ~0.0.9+ | Form/file parsing | Required by FastAPI for file upload endpoints. Often missed during install. |
+| Technology | Version | Purpose for v1.1 | Why No Change Needed |
+|------------|---------|-----------------|----------------------|
+| Flask built-in `session` | Flask 3.x (existing) | Store locked/excluded identifiers between requests | Two short lists of strings. Even 150 entries = ~600 bytes raw JSON — well under Flask's 4KB cookie limit. Zero new config. |
+| PuLP `+=` constraint API | PuLP 2.x (existing) | Inject lock/exclude as ILP constraints before `solve()` | `prob += x[i] == 1` (lock card), pre-filter list (exclude card/golfer), `prob += lpSum(...) >= 1` (lock golfer). All native PuLP — no new API surface. |
+| Jinja2 + HTML checkboxes | (existing) | Per-card toggle controls rendered after CSV upload | Standard `<input type="checkbox">` fields posted to a Flask route. `request.form.getlist()` collects them. No JS framework needed. |
 
-### Optimizer (ILP Solver)
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| PuLP | ~2.8+ | ILP model definition + solver interface | **Primary recommendation.** See detailed rationale below. |
-| CBC (via PuLP) | bundled | ILP solver engine | Ships with PuLP -- zero extra install. Handles this problem size (< 500 variables) in milliseconds. |
+### Supporting Libraries
 
-### Data Processing
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| pandas | ~2.2+ | CSV parsing, data manipulation | Standard for CSV ingestion. `read_csv()` handles encoding edge cases, column type inference. Overkill for simple CSV reads but worth it for the data manipulation needed (filtering $0 salary cards, calculating effective values, grouping by collection). |
+No new libraries required.
 
-### Frontend
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| HTML + Jinja2 templates | -- | Page rendering | Server-side rendering is correct for this app. No SPA needed -- it is a form-submit-and-display-results workflow. |
-| Tailwind CSS (via CDN) | 3.x | Styling | Clean utility-first CSS without build tooling. CDN play script (`<script src="https://cdn.tailwindcss.com">`) is fine for a single-user tool -- no build step required. |
-| Vanilla JavaScript | ES6+ | File upload UX, minor interactivity | Minimal JS for drag-and-drop upload, loading spinners, and maybe tab switching between contest results. No framework needed. |
-
-### Deployment
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| systemd | -- | Process management | Native on Hostinger KVM 2 (Ubuntu/Debian). Manages Uvicorn as a service with auto-restart. |
-| Nginx | -- | Reverse proxy + static files | Terminates HTTPS (via Certbot/Let's Encrypt), proxies to Uvicorn on localhost:8000. |
-| Certbot | -- | TLS certificates | Free HTTPS for silverreyes.net subdomain. |
-| venv | -- | Python isolation | Standard `python -m venv` -- no Docker needed for this scope. |
-
-### Dev Tooling
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| pytest | ~8.x | Testing | Standard Python test runner. Critical for testing optimizer constraint logic. |
-| ruff | ~0.5+ | Linting + formatting | Single tool replaces flake8 + black + isort. Fast, opinionated. |
-| pip-tools | ~7.x | Dependency pinning | `pip-compile` generates pinned `requirements.txt` from `requirements.in`. Reproducible deploys. |
+| Library | Version | Purpose | Decision |
+|---------|---------|---------|----------|
+| Flask-Session | 0.8.0 | Server-side session storage | DO NOT ADD. Lock/exclude state (two lists of player-name strings + card identifiers) is well under the 4KB cookie limit. Adding Flask-Session for this would introduce an unnecessary dependency and filesystem/Redis configuration with zero benefit. |
 
 ---
 
-## Optimizer Library: Detailed Comparison
+## Session State Design
 
-This is the most consequential stack decision. The app's core value is ILP optimization.
+### What to store
 
-### Recommendation: PuLP (with bundled CBC solver)
+Four session keys, all JSON-serializable:
 
-**PuLP wins because:**
-1. **Zero-config solver**: CBC ships inside the PuLP package. `pip install pulp` and you have a working ILP solver. No system-level dependencies, no separate binary installs.
-2. **Readable model code**: PuLP's API maps directly to mathematical ILP notation. Variables, constraints, and objective functions read like the math they represent.
-3. **Problem size match**: This problem has ~200-500 binary decision variables (one per card-slot combination) and ~20-50 constraints. CBC solves this in <100ms. Industrial-grade solvers are unnecessary.
-4. **DFS optimizer precedent**: PuLP is the de facto library for DFS lineup optimizers in the Python community. Numerous open-source DFS optimizers use PuLP+CBC.
-5. **Lightweight**: ~15MB installed. No C++ build dependencies.
+```
+session["locked_cards"]     = []   # list of [player, salary, multiplier] triples
+session["locked_golfers"]   = []   # list of player name strings
+session["excluded_cards"]   = []   # list of [player, salary, multiplier] triples
+session["excluded_golfers"] = []   # list of player name strings
+```
 
-### Why NOT Google OR-Tools
+**Why triples for card-specific keys:** The `Card` dataclass is not JSON-serializable. Store the minimum identifier set — (player, salary, multiplier) is sufficient to uniquely identify a card within a given week's roster. Reconstruct `Card` objects from `validation.valid_cards` at optimize time.
 
-| Factor | PuLP | OR-Tools |
-|--------|------|----------|
-| Install size | ~15 MB | ~200+ MB |
-| Install complexity | `pip install pulp` | Large binary wheels; platform-specific issues common |
-| API complexity | Simple, Pythonic | Verbose, Java-ported API style |
-| Solver included | Yes (CBC bundled) | Yes (SCIP, GLOP, CP-SAT) |
-| Problem fit | Perfect for this size | Designed for much larger/harder problems |
-| VPS friendliness | Excellent | Heavy -- eats RAM on a 8GB KVM 2 |
+**Why not store full Card objects:** Flask session requires JSON-compatible types (dicts, lists, strings, numbers). Dataclasses serialize to nothing useful without a custom encoder.
 
-OR-Tools is the right choice when you need CP-SAT (constraint programming), vehicle routing, or problems with 100K+ variables. For a DFS optimizer with < 500 variables, it is massive overkill. The API is also harder to read and maintain.
+### Size budget (confirmed safe for built-in session)
 
-### Why NOT scipy.optimize.linprog / milp
+- Realistic worst case: user locks 5 cards + excludes 10 golfers
+- 15 entries × ~30 bytes each = ~450 bytes raw JSON
+- After Flask's base64 + HMAC overhead (~33% expansion): ~600 bytes
+- Flask limit: ~3,500 bytes usable
+- Headroom: 5x+ — no risk
 
-`scipy.optimize.milp` (added in scipy 1.9) supports mixed-integer linear programming, but:
-- The API is matrix-based (pass coefficient arrays), not symbolic. Building constraints as numpy arrays is error-prone and hard to debug compared to PuLP's `lpSum(x[i] for i in players) <= 6`.
-- No warm-start or solver tuning.
-- scipy is 50+ MB for one function you could get from PuLP at 15 MB.
+The only scenario that would blow the session limit is storing `valid_cards` (all 150+ cards) in session, which is NOT needed for this milestone. Don't do it.
 
-### Why NOT Gurobi / CPLEX
+### Reset on new CSV upload
 
-Commercial solvers. Free academic licenses exist but add licensing complexity for zero benefit at this problem size. CBC matches their performance for problems under 10K variables.
+In the existing `routes.py` POST handler, clear lock/exclude keys when a roster file is received:
+
+```python
+# At the top of the CSV upload POST branch, before validate_pipeline
+for key in ("locked_cards", "locked_golfers", "excluded_cards", "excluded_golfers"):
+    session.pop(key, None)
+```
+
+This is the correct integration point. The CSV upload is the natural "start over" action.
 
 ---
 
-## Architecture Decision: Server-Side Rendering (NOT SPA)
+## ILP Constraint Injection Design
 
-**Use Jinja2 templates served by FastAPI. Do NOT build a React/Vue/Svelte frontend.**
+### Integration point
 
-Rationale:
-- The app is a **form submission workflow**: upload CSV, click optimize, view results. This is exactly what server-rendered HTML handles well.
-- No real-time updates, no complex client state, no offline mode needed.
-- Single-user tool with no auth -- no JWT/session complexity.
-- Eliminates: Node.js, npm, a build pipeline, CORS configuration, API serialization layer, and a separate deployment artifact.
-- Jinja2 + Tailwind CSS produces clean, responsive pages with zero JavaScript build tooling.
+`_solve_one_lineup` in `gbgolf/optimizer/engine.py` builds and solves one PuLP problem. Lock/exclude constraints must be injected after standard constraints are built, before `prob.solve()`.
 
-The small amount of JS needed (file drag-and-drop, loading indicator) is handled with vanilla JS in a `<script>` tag.
+### Constraint patterns (all native PuLP)
+
+**Exclude a card** — filter before problem construction (simplest; reduces problem size):
+```python
+exclude_keys = set(tuple(t) for t in excluded_card_triples)
+cards = [c for c in cards if (c.player, c.salary, c.multiplier) not in exclude_keys]
+```
+
+**Exclude a golfer** — filter before problem construction:
+```python
+cards = [c for c in cards if c.player not in excluded_golfer_names]
+```
+
+**Lock a specific card** — force binary variable to 1:
+```python
+for i, card in enumerate(cards):
+    if (card.player, card.salary, card.multiplier) in locked_card_keys:
+        prob += x[i] == 1
+```
+
+**Lock a golfer by name** — at least one of their cards must be selected:
+```python
+for player in locked_golfer_names:
+    indices = [i for i, c in enumerate(cards) if c.player == player]
+    if indices:
+        prob += pulp.lpSum(x[i] for i in indices) >= 1
+```
+
+### Infeasibility handling
+
+If a lock constraint makes a lineup infeasible (e.g., locked card pushes salary over cap), `prob.solve()` returns non-Optimal status, `_solve_one_lineup` returns `None`, and the existing UI renders "No lineup could be built for this contest." No new error handling is required.
 
 ---
 
-## Deployment Architecture: Hostinger KVM 2
+## UI Controls Design
 
-**Hostinger KVM 2 specs**: 2 vCPU, 8 GB RAM, 100 GB NVMe, Ubuntu-based.
+### Form pattern
 
-### Deployment Approach
+Lock/exclude controls live on the results page (after CSV upload). A new section renders the eligible card list with checkboxes. The form POSTs to a dedicated route (e.g., `POST /locks`) which writes to session and re-optimizes.
 
-```
-Internet --> Nginx (port 443/80) --> Uvicorn (localhost:8000) --> FastAPI app
-```
+```html
+<!-- Per-card row — player|salary|multiplier as compound value -->
+<input type="checkbox" name="locked_cards"
+       value="{{ card.player }}|{{ card.salary }}|{{ card.multiplier }}">
 
-1. **Nginx** handles TLS termination, static files (CSS/JS), and reverse proxy.
-2. **Uvicorn** runs the FastAPI app with 2 workers (matches vCPU count).
-3. **systemd** manages the Uvicorn process (auto-restart on crash, start on boot).
-4. **No Docker** -- unnecessary for a single Python app on a dedicated VPS. Direct venv deployment is simpler and uses less RAM.
-5. **No database** -- CSV uploads are processed in-memory; no persistence needed beyond the uploaded files (which can live in a `/data/` directory on disk).
-
-### File Storage
-
-Uploaded CSVs are small (< 1 MB). Store in a simple directory structure:
-```
-/opt/gbgolf/data/
-  roster/current.csv       # Latest uploaded roster
-  projections/current.csv  # Latest uploaded projections
-  config/contests.json     # Contest configuration
+<!-- Per-golfer row — name only -->
+<input type="checkbox" name="excluded_golfers" value="{{ card.player }}">
 ```
 
-No database. No S3. Files on disk, overwritten each upload.
+`request.form.getlist("locked_cards")` returns all checked values as a list of strings.
+
+### No JavaScript required
+
+The existing app uses form-submit-then-render. Lock/exclude toggles follow the same pattern. The loading overlay already exists. No HTMX, no Alpine.js, no fetch() calls needed.
+
+---
+
+## What NOT to Add
+
+| Avoid | Why | Use Instead |
+|-------|-----|-------------|
+| Flask-Session | Adds dependency + server-side storage for a payload that fits in a cookie | Flask built-in `session` — already configured, zero extra work |
+| Storing `Card` dataclass objects in session | Not JSON-serializable; Flask session will raise | Store (player, salary, multiplier) triples; reconstruct Cards at optimize time |
+| HTMX / Alpine.js / any JS framework | Toggle controls work via standard form POST | Plain HTML checkboxes + form submit |
+| AJAX re-optimize | Unnecessary complexity; re-optimize on form submit is the app's established pattern | Standard POST/redirect/render cycle |
+| Redis | No cross-process session sharing needed; single Gunicorn worker is fine for single-user app | n/a |
+| Separate lock/exclude database table | No persistence beyond the browser session is needed | Flask session cookie |
 
 ---
 
 ## Alternatives Considered
 
-| Category | Recommended | Alternative | Why Not |
-|----------|-------------|-------------|---------|
-| Framework | FastAPI | Flask | Flask works fine but lacks built-in type validation, async, and auto-docs. FastAPI's `UploadFile` is cleaner than Flask's `request.files`. |
-| Framework | FastAPI | Django | Massive overkill. ORM, admin, auth, migrations -- none needed here. |
-| Optimizer | PuLP (CBC) | OR-Tools | 10x heavier install, verbose API, overkill for < 500 variables. |
-| Optimizer | PuLP (CBC) | scipy.milp | Matrix-based API is hard to read/debug vs PuLP's symbolic constraints. |
-| Frontend | Jinja2 + Tailwind | React/Vue SPA | No complex client state; SSR eliminates entire JS build pipeline. |
-| Frontend | Tailwind CSS CDN | Bootstrap | Tailwind produces cleaner, more custom designs. CDN play script avoids build tools. |
-| Deployment | systemd + Nginx | Docker | Adds complexity for zero benefit on a single-app VPS. |
-| Deployment | venv | conda | conda is heavier and unnecessary when all deps are pip-installable. |
-| Data | pandas | csv stdlib | pandas handles edge cases (encoding, type coercion) and enables easy data manipulation for the optimizer input prep. |
-| Data | File on disk | SQLite/PostgreSQL | No relational queries needed. Current roster + current projections is the entire data model. |
+| Recommended | Alternative | When Alternative Makes Sense |
+|-------------|-------------|-------------------------------|
+| Flask built-in `session` | Flask-Session with filesystem backend | Only if payload exceeds ~3.5KB — which requires storing full Card objects in session, not just identifiers |
+| Filter cards before ILP construction (exclude) | `prob += x[i] == 0` constraint | Equivalent result. Filtering is simpler and reduces the variable count, but either works. |
+| Dedicated `/locks` POST route | Extending the existing CSV upload route | Either works. Separate route is cleaner because lock/exclude operates on already-uploaded data without re-uploading files. |
+| Checkboxes + form POST | Inline AJAX toggle buttons | AJAX would avoid full page reload on each toggle — worthwhile only if re-optimize is slow (it isn't: <1 sec). |
 
 ---
 
-## Installation
+## Version Compatibility
 
-```bash
-# Create project and venv
-mkdir -p /opt/gbgolf && cd /opt/gbgolf
-python3.12 -m venv venv
-source venv/bin/activate
-
-# Core dependencies
-pip install fastapi uvicorn[standard] python-multipart jinja2 pulp pandas
-
-# Dev dependencies
-pip install -D pytest ruff pip-tools
-
-# Pin dependencies
-pip freeze > requirements.txt
-```
-
-### requirements.in (for pip-tools)
-```
-fastapi
-uvicorn[standard]
-python-multipart
-jinja2
-pulp
-pandas
-```
-
-### Key Versions (verify before install)
-| Package | Expected Version Range | Notes |
-|---------|----------------------|-------|
-| fastapi | 0.110 - 0.115+ | Stable API since 0.100+ |
-| uvicorn | 0.27 - 0.30+ | Standard extras include watchfiles for dev reload |
-| pulp | 2.7 - 2.9+ | CBC solver bundled since 2.0 |
-| pandas | 2.1 - 2.2+ | pyarrow backend optional but not needed |
-| jinja2 | 3.1+ | Stable for years |
-| python-multipart | 0.0.6 - 0.0.9+ | Required for FastAPI file uploads |
-
----
-
-## What NOT to Install
-
-| Package | Why Not |
-|---------|---------|
-| SQLAlchemy / any ORM | No database needed |
-| celery / any task queue | Optimization runs in < 1 second; no async job processing needed |
-| redis | No caching layer needed for single-user tool |
-| docker | Direct venv deployment is simpler on dedicated VPS |
-| node / npm | No JS build pipeline; Tailwind via CDN |
-| pydantic-settings | Overkill; contest config is a simple JSON file loaded at startup |
-| gunicorn | Uvicorn handles both dev and production; gunicorn adds no value for 2 workers |
+| Package | Constraint | Notes |
+|---------|------------|-------|
+| Flask | >= 2.0 (existing 3.x) | `session` dict API unchanged since Flask 0.x |
+| PuLP | >= 2.0 (existing 2.x) | `prob +=` constraint API, `LpStatus`, `PULP_CBC_CMD(msg=0)` all unchanged |
+| Pydantic | v2 (existing) | Not involved in lock/exclude path — no changes |
 
 ---
 
 ## Sources
 
-- PuLP documentation: https://coin-or.github.io/pulp/ (MEDIUM confidence -- training data, not live-verified)
-- FastAPI documentation: https://fastapi.tiangolo.com/ (MEDIUM confidence -- training data, not live-verified)
-- OR-Tools documentation: https://developers.google.com/optimization (MEDIUM confidence -- training data)
-- General DFS optimizer patterns: Community knowledge from training data (LOW confidence on specific version numbers)
+- [Flask Sessions — TestDriven.io](https://testdriven.io/blog/flask-sessions/) — confirmed 4KB cookie limit, JSON serialization requirement (MEDIUM confidence, authoritative community source matching Flask docs)
+- [Flask-Session 0.8.0 documentation](https://flask-session.readthedocs.io/en/latest/config.html) — confirmed 0.8.0 is current version; filesystem interface deprecated in 0.7.0 in favor of CacheLib (MEDIUM confidence, official docs via WebSearch)
+- [Flask server-side sessions — TestDriven.io](https://testdriven.io/blog/flask-server-side-sessions/) — confirmed server-side session use cases and when they're needed (MEDIUM confidence)
+- [PuLP 3.3.0 technical docs](https://coin-or.github.io/pulp/technical/pulp.html) — confirmed `+=` constraint API and binary variable patterns (HIGH confidence, official COIN-OR docs)
+- [GitHub coin-or/pulp](https://github.com/coin-or/pulp) — confirmed current PuLP development status (MEDIUM confidence)
+- Existing codebase `gbgolf/optimizer/engine.py` — constraint injection design derived directly from existing `_solve_one_lineup` structure (HIGH confidence, first-party source)
+- Existing codebase `gbgolf/web/routes.py` — session reset integration point derived from existing POST handler (HIGH confidence, first-party source)
+- Existing codebase `gbgolf/data/models.py` — confirmed `Card` dataclass is not JSON-serializable; triple identifier strategy derived from Card field structure (HIGH confidence, first-party source)
 
-**Version confidence: MEDIUM** -- All libraries recommended are mature and stable. Exact latest versions should be confirmed via PyPI before installing, but the APIs and capabilities described are accurate as of the training cutoff.
+---
+
+*Stack research for: GB Golf Optimizer v1.1 Manual Lock/Exclude*
+*Researched: 2026-03-14*

@@ -1,17 +1,17 @@
 # Project Research Summary
 
-**Project:** GB Golf Optimizer
-**Domain:** DFS Fantasy Golf Lineup Optimizer (GameBlazers-specific, ILP-based)
-**Researched:** 2026-03-13
-**Confidence:** MEDIUM
+**Project:** GB Golf Optimizer v1.1 — Manual Lock/Exclude Milestone
+**Domain:** ILP-based DFS golf lineup optimizer (GameBlazers-specific)
+**Researched:** 2026-03-14
+**Confidence:** HIGH
 
 ## Executive Summary
 
-The GB Golf Optimizer is a single-user, server-side web tool that solves an Integer Linear Programming (ILP) problem: given a player card roster (with multipliers and salaries) and uploaded projections, generate optimal lineups for two GameBlazers contest types (Tips cash contest and Intermediate Tee non-cash contest) while respecting hard constraints including salary floors/ceilings, collection type limits, and a cross-lineup card exclusivity rule. The recommended approach is a minimal Python monolith: FastAPI serving Jinja2 templates, PuLP with its bundled CBC solver for the ILP engine, and pandas for CSV ingestion — deployed directly via systemd/Nginx/Certbot on the Hostinger KVM 2 VPS with no Docker and no database. This stack is deliberately lean; every alternative (SPA frontend, OR-Tools, ORM, task queue, Docker) was evaluated and rejected as disproportionate to the scope.
+The GB Golf Optimizer v1.0 is a stateless Flask + PuLP app that parses two CSVs (roster and projections), runs an ILP solve, and renders lineups in a single request-response cycle. The v1.1 milestone adds manual lock/exclude controls — the single most universal feature in all mainstream DFS optimizers. Research confirms the feature is well-understood in the industry, but GameBlazers' card-based system with duplicate golfer cards at different multipliers introduces two distinctions standard tools never have to address: card-level lock/exclude versus golfer-level lock/exclude. These distinctions must be built into the data model, ILP constraint layer, and UI from day one — they cannot be bolted on after the fact.
 
-The dominant technical risk is in the ILP formulation itself. GameBlazers has two properties that break assumptions from standard DFS optimizer tutorials: (1) the same player can appear on multiple cards with different multipliers and salaries — each card must be its own binary decision variable, not each player; and (2) a card used in any lineup (across both contests) cannot appear in any other lineup, requiring a global exclusion set that is passed sequentially from the Tips solve into the Intermediate Tee solve. Getting these two constraints wrong produces silently incorrect lineups. The second most critical data risk is player name normalization — the roster CSV and projections CSV will have name mismatches that must be caught visibly, not silently dropped.
+The recommended implementation approach is a hidden-field serialization architecture: valid cards are serialized to JSON in a hidden form field on the results page, and a new `/reoptimize` POST route deserializes them, applies lock/exclude constraints, and re-runs the ILP without requiring file re-upload. This adds zero new dependencies to the existing stack (Flask, PuLP, Jinja2, Pydantic v2) and stays consistent with the app's established stateless POST/render pattern. Flask's built-in session cookie is sufficient for the lock/exclude state payload (well under the 4KB limit), but the architecture research recommends hidden fields for the card data itself to avoid the cookie size risk entirely.
 
-Build order should mirror the dependency chain. The data model and parser must be correct before the optimizer is written, the optimizer must be validated with unit tests before the API layer, and the API must exist before the frontend. The architectural recommendation is to build and test the ILP formulation entirely with hardcoded data before any HTTP or UI work begins. This keeps the highest-risk, highest-value component isolated and verifiable early.
+The critical risk in this milestone is constraint correctness in the multi-lineup sequential loop. The optimizer already tracks used cards across lineups to prevent cross-contest card reuse. Lock constraints must interact correctly with this mechanism: a card-level lock can only apply once (the card is consumed after assignment), while a golfer-level lock means "any card for this player must appear somewhere." Getting this semantics distinction wrong produces silently wrong lineups. Pre-solve constraint validation (salary feasibility, collection limit checks, conflict detection between lock and exclude) must ship alongside the lock feature itself, not as a follow-up.
 
 ---
 
@@ -19,159 +19,147 @@ Build order should mirror the dependency chain. The data model and parser must b
 
 ### Recommended Stack
 
-A single-process Python application is the right fit for this scope. FastAPI handles HTTP and file uploads via `UploadFile`; Jinja2 renders server-side HTML (no JS framework); PuLP with its bundled CBC solver handles ILP optimization with zero system-level dependencies; pandas handles CSV ingestion with header-name-based access and BOM-safe encoding. Tailwind CSS via CDN provides styling without a build pipeline. The VPS deployment is Nginx (TLS/proxy) → Uvicorn (2 workers matching 2 vCPUs) → FastAPI app, managed by systemd. No Docker, no database, no ORM, no task queue.
+No new dependencies are required for this milestone. The existing Flask 3.x, PuLP 2.x, Jinja2, and Pydantic v2 stack handles all three feature areas without addition. Flask's built-in signed-cookie session stores the lock/exclude identifier sets (worst-case ~600 bytes, well within the 4KB limit). PuLP's `+=` constraint API natively supports the two lock patterns needed. HTML checkboxes plus standard form POST replaces any need for HTMX or JavaScript frameworks.
+
+The one candidate addition — `flask-session` with filesystem backend — was researched and explicitly rejected. The locked card identifier payload fits in a cookie. Storing full `Card` dataclass objects in session is the only scenario that would require server-side session storage, and that is an anti-pattern (dataclasses are not JSON-serializable).
 
 **Core technologies:**
-- **Python 3.12** — runtime; avoid 3.13 until confirmed stable on target VPS
-- **FastAPI ~0.115** — HTTP API and file upload handling; Pydantic validation reduces boilerplate
-- **Uvicorn ~0.30** — ASGI server; 2 workers for the 2-vCPU KVM 2
-- **PuLP ~2.8 + bundled CBC** — ILP model and solver; `pip install pulp` produces a working solver with no system dependencies; handles < 500 variables in milliseconds
-- **pandas ~2.2** — CSV parsing with encoding safety and column-name-based access
-- **Jinja2 ~3.1** — server-side HTML templates; eliminates JS build toolchain entirely
-- **Nginx + Certbot** — TLS termination and reverse proxy on the VPS
-- **systemd** — process management and auto-restart
-- **pytest + ruff + pip-tools** — test runner, linter/formatter, and dependency pinning
+- **Flask built-in session**: Store lock/exclude identifiers — fits in cookie, zero new config
+- **PuLP `+=` constraint API**: Inject `x[i] == 1` (card lock) and `lpSum >= 1` (golfer lock) before `solve()`
+- **Jinja2 + HTML checkboxes**: Per-card toggle controls via standard form POST — no JS needed
+- **Hidden form field (JSON)**: Carry serialized `valid_cards` between requests without re-upload or server storage
 
-See `.planning/research/STACK.md` for full comparison tables and rejected alternatives.
+See `.planning/research/STACK.md` for full rationale, rejected alternatives, and session size calculations.
 
 ### Expected Features
 
-The full feature set is documented in `.planning/research/FEATURES.md`. Summary below.
+All research into mainstream DFS optimizers (FantasyPros, Footballguys, Daily Fantasy Fuel, SaberSim, FTN Fantasy) confirms that lock/exclude is table stakes — a feature users expect without being asked. Every major tool implements it the same way: lock forces 100% exposure in all lineups, exclude removes from the eligible pool entirely, state persists within a session and resets on new upload.
 
-**Must have (table stakes):**
-- CSV roster upload and parsing (with $0 salary filtering and duplicate card handling)
-- Projections CSV upload (with player name normalization and unmatched-player report)
-- Contest configuration file (salary floor + ceiling, roster size, collection limits per contest type)
-- Optimal lineup generation: ILP with salary range, collection upper bounds, cross-lineup card exclusion
-- Cash-first priority ordering (Tips optimized first; Intermediate Tee uses remaining card pool)
-- Effective value display (projected_score × multiplier per card)
-- Lineup display with per-card stats and per-lineup totals
-- Error handling for malformed CSV input
+**Must have (v1.1 core, P1):**
+- Exclude a golfer by name — removes all their cards from pool before ILP (pre-filter, no constraint needed)
+- Exclude a specific card — removes that exact card from pool before ILP (pre-filter)
+- Lock a specific card — force this card into one lineup via `x[i] == 1` equality constraint
+- Lock a golfer by name — require at least one of their cards via `lpSum >= 1` constraint
+- Session-scoped state — lock/exclude resets on new CSV upload, persists across re-optimize calls
+- Player pool table with lock/exclude controls — cards must be visible before users can act on them
+- Visual confirmation in lineup output — locked cards marked so users can confirm constraints took effect
 
-**Should have (differentiators, Phase 2):**
-- Card-vs-card comparison for same player (unique to GameBlazers card system; low complexity)
-- Manual player lock/exclude (force a card into or out of a lineup)
-- Remaining card pool visualization (shows what is available after Tips lineups are built)
-- Lineup export / copy-paste format (reduces manual re-entry friction)
-- Projection adjustment interface (tweak individual projections in-browser before optimizing)
+**Should have (P2, add after core works):**
+- "Clear all" button — clears lock/exclude state without re-uploading
+- Lock/exclude state summary — shows "3 cards locked, 2 golfers excluded" above the Optimize button
+- Card-vs-card comparison view — side-by-side for same golfer with different multipliers
+- Lineup export — copy to clipboard or download as CSV
 
-**Advanced (Phase 3):**
-- Multi-lineup diversity / exposure limits (limit a golfer to at most N of K lineups)
-- Sensitivity analysis (which players nearly made the lineup and by how much)
+**Defer to v1.2+:**
+- Exposure limits (ADV-01) — cap how often a single golfer appears across all lineups
+- Diversity constraints (ADV-02) — enforce minimum player differences between lineups
+- Sensitivity analysis (ADV-03) — show how lineup changes if a projection shifts
+- Contest configuration editor in web UI
 
-**Defer indefinitely:**
-- Historical results tracking
-- Ownership percentage integration
-- Automatic projection scraping
-- GameBlazers scraping for contest data
-- Any social or multi-user features
+See `.planning/research/FEATURES.md` for the full prioritization matrix, competitor analysis, and feature dependency graph.
 
 ### Architecture Approach
 
-The architecture is a three-layer monolith: Frontend (static HTML/JS served by FastAPI) → FastAPI API layer → Python optimization modules. There is no database; CSV data lives in server memory per session and the only persistent state is the contest configuration JSON file on disk. The core algorithmic approach is sequential ILP with cumulative exclusion: solve all Tips lineups in order (maintaining a `used_card_ids` set), then solve all Intermediate Tee lineups using the remaining card pool. Each ILP call is a clean independent optimization (binary variables, maximize effective_value sum, subject to roster size, salary range, collection upper bounds, and card exclusion constraints).
+The v1.0 architecture is a single-route, single-template, stateless request-response loop. v1.1 extends this with one new route (`POST /reoptimize`) and one new data structure (`LockExcludeSpec`). The card data problem — files are temp files deleted after the first request — is solved by serializing `valid_cards` to JSON in a hidden form field on the results page. The `reoptimize` route deserializes these cards, parses the lock/exclude form fields into a `LockExcludeSpec`, and calls an extended `optimize()` function. A stable card key `(player, salary, multiplier, collection)` replaces the Python `id()` approach used in v1.0 for cross-lineup tracking, which breaks across serialization boundaries.
 
-**Major components:**
-1. **Card dataclass + CSV Parser** — validates and parses roster and projections CSVs into typed `Card` objects; normalizes player names; filters ineligible cards
-2. **Card Inventory** — holds parsed cards in memory; merges projections to compute `effective_value = projected_score * multiplier`
-3. **Contest Config Manager** — loads/saves contest definitions (salary ranges, roster sizes, collection limits) from `config/contests.json`
-4. **Optimization Engine** — runs PuLP ILP solves sequentially per contest entry; maintains global `used_card_ids` exclusion; returns structured lineup results
-5. **FastAPI App** — exposes upload, optimize, and config endpoints; renders results via Jinja2 templates
-6. **Frontend (HTML/JS/CSS)** — file upload UI, lineup display, optional config editing
+**Major components (new or modified):**
+1. **`Card.card_key` property** — stable composite identity for lock/exclude tracking and serialization; replaces `id()` across requests
+2. **`LockExcludeSpec` dataclass** — carries `lock_cards`, `lock_players`, `exclude_cards`, `exclude_players` into the optimizer with a `validate()` method for conflict detection
+3. **`cards_to_json()` / `cards_from_json()`** — serialization helpers for the hidden form field transport
+4. **`POST /reoptimize` route** — new route in `routes.py`; deserializes cards, applies spec, re-runs optimizer, re-renders results
+5. **Extended `optimize()` and `_solve_one_lineup()`** — accept `LockExcludeSpec`, apply lock constraints before `solve()`, pre-filter excludes before ILP construction
+6. **Lock/exclude panel in `index.html`** — checkboxes per card row, hidden `cards_json` field, Re-Optimize button
 
-See `.planning/research/ARCHITECTURE.md` for the full ILP formulation, data flow diagram, project structure, and build order.
+See `.planning/research/ARCHITECTURE.md` for the full data flow diagrams, component boundary tables, and the five architectural anti-patterns to avoid.
 
 ### Critical Pitfalls
 
-The full pitfall catalog (16 pitfalls, rated Critical/Moderate/Minor) is in `.planning/research/PITFALLS.md`. The five most dangerous:
+The full pitfall catalog is in `.planning/research/PITFALLS.md`. The five most dangerous:
 
-1. **Duplicate player cards treated as identical players** — Each card must have a unique `card_id` (row index or composite key), not keyed on player name. Model `x_card_id` not `x_player_name`. If same golfer cannot appear twice in one lineup, add a per-player sum constraint. Address in Phase 1 (data model), not later.
+1. **Lock constraint leaking across the multi-lineup sequential loop** — Card-level locks can only apply once (card is consumed after assignment). Golfer-level locks may become infeasible in lineup 2 if the golfer has only one card. Distinguish these semantically before writing any ILP code; surface per-lineup lock resolution in the UI. Recovery is HIGH cost if deferred.
 
-2. **Cross-contest card locking not enforced globally** — The Tips and Intermediate Tee solves are separate ILP calls. Cards used in Tips must be explicitly removed from the candidate pool before running Intermediate Tee. Failure produces lineups with reused cards. Add a post-solve validation: total unique card IDs == sum of all lineup sizes.
+2. **Infeasibility with no useful error message** — When locked cards push salary over cap or exceed collection limits, the solver returns non-Optimal with no guidance. Pre-solve diagnostics (salary sum check, collection limit check, roster size check) must ship with the lock feature — never separately. O(n) Python checks, microsecond cost.
 
-3. **Player name matching failures (silent drops)** — Normalize both CSVs (lowercase, strip whitespace, remove periods/suffixes) before joining. Use fuzzy matching (`rapidfuzz`) as fallback. Always display an explicit unmatched-player report — never silently exclude a card. Address in Phase 1.
+3. **Conflicting lock + exclude constraints causing silent infeasibility** — User locks a card and excludes the same golfer. ILP receives `x[i] == 1` and `sum == 0` for the same variable, which is immediately infeasible. Add `validate()` to `LockExcludeSpec`; add conflict detection as a pre-flight check before any solve attempt; disable conflicting UI states in the template.
 
-4. **Salary floor missing from ILP** — GameBlazers has both a salary floor and ceiling. Most DFS tutorials only model the cap (upper bound). Model as a two-sided constraint: `min_salary <= sum(salary_i * x_i) <= max_salary`. Add post-solve validation. Address in Phase 2 (optimizer core).
+4. **Card vs. golfer exclude ambiguity causing wrong results** — "Exclude" meaning exclude-one-card versus exclude-all-cards-for-this-golfer are distinct and must be labeled explicitly in the UI. Store in two separate sets in `LockExcludeSpec`. Implementing only one level silently produces wrong lineups.
 
-5. **Collection constraints modeled as exact counts instead of independent upper bounds** — "Max 3 Weekly" and "Max 6 Core" are independent upper bounds, not a partition. Model them as separate `<= constraints`, one per collection type. Verify whether Franchise/Rookie columns are additional collection types or boolean flags — this must be clarified before coding constraints.
+5. **Stale locks after CSV re-upload due to `id()` usage** — Storing lock state by Python `id()` silently no-ops when new card objects are created on re-upload. Always use the stable composite key `(player, salary, multiplier, collection)`. Always clear lock/exclude state when a new upload succeeds and show a visible notice to the user.
 
 ---
 
 ## Implications for Roadmap
 
-### Phase 1: Foundation and Data Integrity
+Based on combined research, a four-phase structure is recommended. All five critical pitfalls map to Phase 1 — they are architectural decisions that cannot be deferred without rework. The phases are strictly ordered by code dependency.
 
-**Rationale:** The optimizer is only as good as its input data. Player name mismatches and $0 salary cards produce incorrect lineups silently. The data model (unique card IDs) is an architectural decision that cannot be changed later without rewriting the optimizer. The card-level data model and CSV parsing layer must be correct and tested before any optimization work begins. Pitfalls 1, 3, 4, 11, and 13 all belong here.
+### Phase 1: Card Identity and Constraint Foundation
 
-**Delivers:** A tested CSV ingestion pipeline that produces validated `Card` objects with unique IDs, effective values, and explicit unmatched-player reporting. Also delivers the contest configuration file schema and PuLP/CBC verified working on the target VPS.
+**Rationale:** The stable card key is a prerequisite for everything else. ILP constraint logic must be validated before UI is built around it — infeasibility behavior must be understood to design error messages. All five critical pitfalls require decisions made here (card vs. golfer semantics, conflict detection, pre-solve diagnostics, stable key scheme, session state reset on upload). Deferring any of these creates rework across all later phases.
 
-**Addresses features:** CSV roster upload and parsing; projections upload; contest configuration file; player field filtering; error handling for bad CSV input.
+**Delivers:** A working optimizer that correctly applies lock and exclude constraints, handles infeasibility with useful per-constraint diagnostics, and resets state on new upload. Testable via unit tests without any UI.
 
-**Avoids:** Duplicate card confusion (Pitfall 1), silent name drop (Pitfall 3), $0 salary cards in optimizer (Pitfall 4), CSV encoding/header brittleness (Pitfall 11), solver binary failure on VPS (Pitfall 13).
+**Addresses features:** All four lock/exclude types (lock card, lock golfer, exclude card, exclude golfer); session-scoped state reset on upload; constraint validation pre-flight check.
 
-**Research flag:** Standard patterns — no additional research needed. CSV parsing with pandas, PuLP installation, and contest config-as-JSON are all well-documented.
+**Avoids:**
+- Pitfall 1 (lock leaking across sequential loop): Design card-lock vs. golfer-lock semantics before writing ILP code
+- Pitfall 2 (infeasibility with no useful error): Include salary/collection pre-solve diagnostics alongside constraint injection
+- Pitfall 3 (stale locks after re-upload): Use stable composite key from day one; clear state on new upload
+- Pitfall 4 (card vs. golfer exclude ambiguity): Separate `excluded_card_keys` and `excluded_players` into distinct sets
+- Pitfall 5 (conflicting lock + exclude): Add `validate()` to `LockExcludeSpec`; conflict detection as pre-flight check
 
-### Phase 2: Optimizer Core
+**Implementation order within phase:**
+1. Add `card_key` property to `Card` dataclass; update `optimize()` to use it instead of `id()`
+2. Add `LockExcludeSpec` dataclass with `validate()` method
+3. Extend `_solve_one_lineup()` with `locked_indices` parameter and pre-solve diagnostics
+4. Extend `optimize()` with `spec: LockExcludeSpec | None = None`
+5. Add session reset on new CSV upload in `routes.py`
 
-**Rationale:** The ILP formulation is the highest-risk, highest-value component. It must be built and unit tested with synthetic card data before any API or UI work begins. This phase validates the mathematical model (salary range, collection bounds, card exclusion, effective value objective) and the sequential multi-lineup algorithm. Pitfalls 2, 5, 6, 7, 8, 9, 10, and 12 all belong here.
+### Phase 2: Serialization and Re-Optimize Route
 
-**Delivers:** A fully tested `solve_lineup()` function and a multi-lineup generation loop with global card exclusion. Covers Tips (3 lineups) and Intermediate Tee (2 lineups) with correct priority ordering. Includes infeasibility diagnostics.
+**Rationale:** Once the optimizer correctly handles lock/exclude specs, the transport layer (serialization + new route) is straightforward. Serialization is a prerequisite for the route; the route is a prerequisite for the UI.
 
-**Addresses features:** Optimal lineup generation with all constraints; cash-first priority ordering; cross-lineup card locking; collection constraint enforcement; salary cap + floor enforcement; effective value display.
+**Delivers:** A working `POST /reoptimize` endpoint that accepts hidden card JSON plus form-posted lock/exclude fields, runs the optimizer, and returns results. End-to-end flow testable without a polished UI.
 
-**Avoids:** Salary floor omission (Pitfall 5), collection constraint modeling errors (Pitfall 6), cross-contest card reuse (Pitfall 7), multiplier missing from objective (Pitfall 8), non-binary variables (Pitfall 9), silent infeasibility (Pitfall 10), near-identical lineup generation (Pitfall 2).
+**Uses:** Flask hidden form field pattern (no new dependencies); `cards_to_json()` / `cards_from_json()` helpers; existing `render_template` pattern from `routes.py`.
 
-**Research flag:** Standard ILP patterns are well-documented. The GameBlazers-specific constraint combination (salary range + collection bounds + global card exclusion) should be verified with unit tests, not additional research.
+**Implements:** `POST /reoptimize` route in `routes.py`; serialization helpers in `models.py`.
 
-### Phase 3: API Layer and Web UI
+**Avoids:** Storing full `Card` objects in session (anti-pattern per ARCHITECTURE.md); using Python `id()` in serialized data (breaks across requests).
 
-**Rationale:** Once the optimizer engine is proven correct in isolation, wire it to FastAPI endpoints and Jinja2 templates. The UI is a form-submit-and-display workflow — server-side rendering is correct for this pattern. This phase also adds deployment hardening (upload validation, rate limiting, config drift protection).
+### Phase 3: Template UI and Lock/Exclude Panel
 
-**Delivers:** A working web application: file upload UI, optimization trigger, and lineup display pages. Contest config viewable and editable in the browser. Deployment-ready with Nginx/systemd configuration.
+**Rationale:** Pure presentation layer. All logic is validated; UI is wiring. Last in the core build because template work is fastest to iterate when the backend contract is stable.
 
-**Addresses features:** Lineup display with per-card stats and totals; salary utilization display; unmatched-player report in UI; contest config display and editing.
+**Delivers:** Player pool table with per-card lock/exclude checkboxes, hidden `cards_json` field, Re-Optimize button, visual markers on locked cards in lineup output, and lock/exclude state that re-renders correctly after re-optimize.
 
-**Avoids:** No upload size validation (Pitfall 14), contest config drift (Pitfall 15), projections/roster asymmetry silent drops (Pitfall 16).
+**Implements:** Architecture component "Lock/exclude panel in `index.html`"; hidden field; Re-Optimize form; loading overlay applied to `/reoptimize` form submit.
 
-**Research flag:** Standard FastAPI + Jinja2 + Tailwind patterns — no additional research needed. Nginx/systemd deployment is well-documented for Ubuntu.
+**Avoids:** Full-page scroll loss (accepted as MVP behavior per research; HTMX upgrade deferred).
 
-### Phase 4: Usability Enhancements
+### Phase 4: P2 Polish Features
 
-**Rationale:** The core optimizer is complete. This phase layers on the differentiator features identified in FEATURES.md that reduce friction and add decision-making value. All are incremental additions to the working baseline.
+**Rationale:** "Clear all" button, lock/exclude state summary, card-vs-card comparison, and lineup export are all low-complexity additions that require the Phase 3 UI to exist first but add no architectural risk. These can be done in any order.
 
-**Delivers:** Card-vs-card comparison for same player; manual player lock/exclude; remaining card pool visualization after Tips; lineup export/copy-paste format; projection adjustment interface in-browser.
+**Delivers:** Improved UX for weekly use; surfaces card comparison data that is unique to GameBlazers' multi-card system; reduces re-entry friction via export.
 
-**Addresses features:** The full Phase 2 feature list from FEATURES.md (differentiators with low-to-medium complexity).
-
-**Research flag:** No additional research needed. Manual lock/exclude is a standard ILP constraint addition (`x_i = 1` or `x_i = 0` forced). Remaining pool visualization is a display feature.
-
-### Phase 5: Advanced Optimization
-
-**Rationale:** Diversity constraints and sensitivity analysis require changes to the ILP formulation and are reserved until the baseline optimizer has been used in practice. Real-world usage will clarify whether near-identical lineups are actually a problem (card locking already provides natural diversity) before investing in joint multi-lineup optimization.
-
-**Delivers:** Configurable exposure limits per golfer across lineups; optional minimum-difference constraints between lineups; sensitivity/shadow price analysis.
-
-**Addresses features:** Multi-lineup correlation awareness; lineup diversity controls; sensitivity analysis ("how close").
-
-**Research flag:** This phase warrants deeper research before implementation. Joint multi-lineup ILP (solving all Tips lineups simultaneously) is a meaningfully different formulation from sequential ILP. The tradeoffs between sequential sub-optimality (Pitfall 12) and implementation complexity should be evaluated with real-world data from Phase 4 usage.
+**Addresses features:** "Clear all" button; lock/exclude state summary; card-vs-card comparison (USBL-02); lineup export (USBL-04).
 
 ### Phase Ordering Rationale
 
-- Data integrity before optimization: Name matching and card ID bugs produce silent incorrect output that is hard to detect later. Catching them at ingestion is much cheaper than debugging optimizer output.
-- Optimizer before API: The ILP formulation is the riskiest component. Test it with unit tests and hardcoded data first. Building the UI before the optimizer is tested leads to hard-to-debug integration problems.
-- API before frontend: The Jinja2 templates render the API response; they cannot be tested without working endpoints.
-- Usability before advanced optimization: Diversity constraints require real-world feedback to justify. Build the baseline, use it for a tournament cycle, then decide if diversity enhancement is needed.
-- The ARCHITECTURE.md component build order (Config Manager + CSV Parser → Card Inventory + Optimization Engine → FastAPI endpoints → Frontend) maps directly to this phase structure.
+- Phases 1 through 3 are strictly ordered by code dependency: stable key → constraint logic → serialization → route → UI. No phase can be reordered without breaking the next.
+- All five critical pitfalls require Phase 1 decisions. Deferring any of them creates rework in the ILP layer, the UI layer, and the state management layer simultaneously.
+- Phase 4 polish features are independent of each other and can be done in any order or in parallel once Phase 3 is complete.
+- ADV-01 (exposure limits) and ADV-02 (diversity constraints) are explicitly deferred to v1.2+ — they add significant ILP formulation complexity and are not required for the lock/exclude use case validated in v1.1.
 
 ### Research Flags
 
-Phases likely needing deeper research during planning:
-- **Phase 5 (Advanced Optimization):** Joint multi-lineup ILP and exposure-limit formulations are meaningfully more complex than the baseline. Worth a targeted research spike before planning this phase, using real roster data to evaluate whether sequential sub-optimality is materially significant.
+Phases with well-documented patterns (skip additional research):
+- **Phase 2 (Serialization/Route):** Standard Flask route + JSON serialization; no unknowns beyond what is in ARCHITECTURE.md.
+- **Phase 3 (Template UI):** Standard Jinja2/HTML form patterns; existing `index.html` is the guide.
+- **Phase 4 (Polish):** All P2 features are low-complexity additions with established patterns.
 
-Phases with standard patterns (skip research-phase):
-- **Phase 1:** CSV parsing with pandas, PuLP/CBC installation, JSON config file — all standard, well-documented Python patterns.
-- **Phase 2:** Single-lineup ILP with PuLP is thoroughly documented. The GameBlazers-specific constraints are novel combinations of standard patterns, testable via unit tests.
-- **Phase 3:** FastAPI + Jinja2 + Tailwind + Nginx/systemd deployment is standard and well-documented.
-- **Phase 4:** All usability features are incremental UI and constraint additions with no novel research needed.
+Phases that should use the PITFALLS.md checklist as a test plan (no external research needed):
+- **Phase 1 (ILP Constraint Foundation):** The multi-lineup sequential loop interaction with lock constraints is the highest-risk area. The "Looks Done But Isn't" checklist in PITFALLS.md should be used as the acceptance test plan for this phase before proceeding to Phase 2. All answers are in the existing codebase and PITFALLS.md — no external research needed.
 
 ---
 
@@ -179,40 +167,47 @@ Phases with standard patterns (skip research-phase):
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | MEDIUM | All libraries are mature and stable. Version numbers are from training data (cutoff ~mid 2025); confirm latest via PyPI before installing. API capabilities described are accurate. |
-| Features | MEDIUM | Table stakes and differentiators derived from DFS optimizer ecosystem (FantasyLabs, SaberSim, etc.) plus GameBlazers-specific rules from PROJECT.md. Core feature set is stable; GameBlazers-specific rules confirmed from project documentation. |
-| Architecture | HIGH | Three-layer monolith + sequential ILP + stateless request pipeline are proven patterns for this problem class. ILP formulation derived from operations research fundamentals. The sequential-vs-joint optimization tradeoff is well-understood. |
-| Pitfalls | MEDIUM-HIGH | ILP formulation pitfalls (binary variables, constraint modeling, infeasibility) are well-established in OR literature. GameBlazers-specific pitfalls (duplicate cards, cross-contest exclusion) derived from project requirements with high confidence. Name normalization and CSV encoding pitfalls are well-known Python/pandas patterns. |
+| Stack | HIGH | Based on direct codebase inspection plus verified Flask/PuLP documentation. No new dependencies means no unknown API surfaces. |
+| Features | HIGH | Lock/exclude behavior verified across FantasyPros, Footballguys, Daily Fantasy Fuel, SaberSim, FTN Fantasy. GameBlazers-specific card distinctions derived from PROJECT.md (first-party). |
+| Architecture | HIGH | Based on direct codebase inspection of `engine.py`, `__init__.py`, `routes.py`, `models.py`, `index.html`. Hidden-field serialization is a standard, well-understood web pattern. |
+| Pitfalls | HIGH | All five critical pitfalls are grounded in existing codebase analysis, ILP constraint theory, and verified DFS optimizer community patterns. Recovery costs are explicitly rated. |
 
-**Overall confidence:** MEDIUM — sufficient to begin implementation. The main uncertainty is exact library versions (verify via PyPI) and two unresolved GameBlazers rule questions noted below.
+**Overall confidence:** HIGH
+
+The unusually high confidence across all areas reflects that this is a subsequent milestone on an existing, inspected codebase rather than greenfield research. The domain (ILP lock/exclude for DFS) is well-documented. The only genuine unknowns are UX edge cases (scroll position loss on full-page reload; per-lineup lock resolution display format), both of which are explicitly deferred or accepted as MVP behavior.
 
 ### Gaps to Address
 
-- **Franchise and Rookie CSV columns:** PITFALLS.md flags that the roster CSV has `Collection`, `Franchise`, and `Rookie` columns. It is unclear whether Franchise/Rookie are separate collection types (requiring their own ILP constraints) or boolean flags. This must be verified against a real GameBlazers export before Phase 2 ILP constraints are coded. If they are collection types, the collection constraint model needs to expand to handle them.
-
-- **Same-golfer-in-same-lineup rule:** PITFALLS.md flags uncertainty about whether GameBlazers allows the same golfer on two different cards in the same lineup. If prohibited, a per-player sum constraint (`sum(x_i for cards where player == golfer) <= 1`) must be added in Phase 2. This is easy to add but must be confirmed before the optimizer is finalized.
-
-- **Exact contest parameters:** The example contest config values in ARCHITECTURE.md (salary ranges, roster sizes, collection limits) are illustrative. Actual current values must be confirmed against the live GameBlazers contest before deploying. This is a Phase 1 config task, not a research task.
-
-- **Library version confirmation:** All recommended versions are from training data. Run `pip index versions fastapi pulp pandas uvicorn` on the VPS before finalizing `requirements.in`.
+- **Per-lineup lock resolution display format**: The architecture describes showing "Card locked in lineup 1; not available for lineup 2" but does not specify the exact UI treatment (inline notice vs. tooltip vs. separate section). Decide during Phase 3 template work.
+- **Card-vs-card comparison layout**: The P2 feature is identified as valuable but the display format (side-by-side table, inline in card pool, or separate section) is not specified. Design during Phase 4.
+- **"Clear all" scope**: Should "Clear all" clear only locks, only excludes, or both? Industry standard is both. Confirm during Phase 4 planning.
 
 ---
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- `E:/ClaudeCodeProjects/GBGolfOptimizer/PROJECT.md` — GameBlazers-specific contest rules, constraint definitions, and scope boundaries
-- PuLP documentation (coin-or.github.io/pulp) — ILP formulation patterns and binary variable declaration
-- FastAPI documentation (fastapi.tiangolo.com) — UploadFile handling, Jinja2 integration, endpoint structure
+
+- Existing codebase: `gbgolf/optimizer/engine.py`, `gbgolf/optimizer/__init__.py`, `gbgolf/web/routes.py`, `gbgolf/data/models.py`, `gbgolf/data/filters.py`, `gbgolf/web/templates/index.html` — constraint integration design, session state reset point, Card field structure, `id()` usage patterns
+- PuLP technical documentation (coin-or.github.io/pulp) — `+=` constraint API, binary variable patterns, `LpStatus` values
+- FantasyPros DFS Optimizer support documentation — lock/exclude UX behavior (verified via web search 2026-03-14)
+- Footballguys DFS Multi Lineup Optimizer Quick Start Guide — lock/exclude behavior, exposure percentage (verified via web search 2026-03-14)
 
 ### Secondary (MEDIUM confidence)
-- DFS optimizer community patterns (training data) — multi-lineup sequential ILP with card exclusion; this is the standard pattern used by pydfs-lineup-optimizer and similar tools
-- FantasyLabs, SaberSim, FantasyCruncher, DraftKings optimizer (training data) — feature landscape for DFS lineup optimizers
 
-### Tertiary (LOW-MEDIUM confidence)
-- Exact PyPI version numbers — from training data cutoff ~mid 2025; should be confirmed before install
-- Hostinger KVM 2 Ubuntu environment specifics — general Linux deployment knowledge; verify PuLP/CBC binary compatibility on actual VPS early in Phase 1
+- Flask Sessions — TestDriven.io — 4KB cookie limit, JSON serialization requirement, server-side session use cases
+- Flask-Session 0.8.0 documentation — version confirmed, filesystem interface deprecated in 0.7.0
+- Daily Fantasy Fuel PGA optimizer — lock/exclude feature patterns (web search 2026-03-14)
+- SaberSim golf optimizer — lock/exclude feature patterns (web search 2026-03-14)
+- FTN Fantasy PGA optimizer — lock/exclude feature patterns (web search 2026-03-14)
+- RotoWire NFL DFS Optimizer FAQ, Fantasy Footballers — over-locked infeasibility patterns
+- GitHub coin-or/pulp — current PuLP development status and CBC constraint handling
+
+### Tertiary (LOW confidence)
+
+- DFS community documentation on over-lock infeasibility — multiple sources agree, elevating to MEDIUM in aggregate; listed here for transparency about source type
 
 ---
-*Research completed: 2026-03-13*
+
+*Research completed: 2026-03-14*
 *Ready for roadmap: yes*
