@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Manual Lock/Exclude
-status: completed
-stopped_at: Phase 7 context gathered
-last_updated: "2026-03-14T20:02:15.370Z"
-last_activity: "2026-03-14 — Plan 06-03 complete: 3 UI-03 tests GREEN; Lock column in lineup tables with 🔒 icon via Jinja2 set membership"
+milestone: v1.2
+milestone_name: Polish
+status: in-progress
+stopped_at: Completed 07-01-PLAN.md
+last_updated: "2026-03-14T20:17:34.801Z"
+last_activity: "2026-03-14 — Plan 07-01 complete: UI-05/UI-06 constraint count div + updateConstraintCount() JS wired; 4 new tests GREEN, sort headers RED scaffold for Plan 02"
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 8
-  completed_plans: 8
-  percent: 100
+  total_plans: 10
+  completed_plans: 9
+  percent: 90
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-14)
 
 **Core value:** Generate the best possible cash contest lineups from the user's available player cards, maximizing expected score within salary and collection constraints.
-**Current focus:** Phase 6 complete — Lock/Exclude UI all 3 plans done; v1.1 milestone delivered
+**Current focus:** Phase 7 in progress — Plan 01 complete (UI-05/UI-06 constraint count), Plan 02 (sort headers) remaining
 
 ## Current Position
 
-Phase: 6 of 7 (Lock/Exclude UI) — Complete
-Plan: 3 of 3 complete (Plans 01-03 all done — RED tests + UI-01 + UI-03 lock column)
-Status: Phase 6 Plan 03 complete — Phase 6 fully done; v1.1 milestone complete
-Last activity: 2026-03-14 — Plan 06-03 complete: 3 UI-03 tests GREEN; Lock column in lineup tables with 🔒 icon via Jinja2 set membership
+Phase: 7 of 7 (Polish) — In Progress
+Plan: 1 of 2 complete (Plan 01 done — constraint count display + 5 new tests; Plan 02 sort headers remaining)
+Status: Phase 7 Plan 01 complete — constraint count div and JS wired; test_sort_headers_rendered RED scaffold ready for Plan 02
+Last activity: 2026-03-14 — Plan 07-01 complete: UI-05/UI-06 constraint count div + updateConstraintCount() JS wired; 4 new tests GREEN, sort headers RED scaffold for Plan 02
 
-Progress: [██████████] 100% (v1.1, 3/3 Phase 6 plans done)
+Progress: [█████████░] 90% (9/10 plans done)
 
 ## Accumulated Context
 
@@ -60,6 +60,7 @@ Recent decisions affecting current work:
 - [Phase 06]: _parse_card_keys() defined inline in reoptimize() to keep helper co-located with its only caller
 - [Phase 06]: check_feasibility called per contest config in a loop; ConstraintSet built from parsed form values directly (not session re-read)
 - [Phase 06-lock-exclude-ui]: Lock column renders lock icon via Jinja2 set membership against locked_card_keys; tfoot colspan bumped from 2 to 3
+- [Phase 07-polish]: constraint-count element inside show_results block; .lock-golfer-cb listener added; test_sort_headers_rendered intentionally RED for Plan 02
 
 ### Pending Todos
 
@@ -71,6 +72,6 @@ None — Phase 4 multi-lineup lock semantics resolved via fires-once tracking.
 
 ## Session Continuity
 
-Last session: 2026-03-14T20:02:15.367Z
-Stopped at: Phase 7 context gathered
-Resume file: .planning/phases/07-polish/07-CONTEXT.md
+Last session: 2026-03-14T20:17:34.798Z
+Stopped at: Completed 07-01-PLAN.md
+Resume file: None

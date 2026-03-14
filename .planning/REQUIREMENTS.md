@@ -26,8 +26,8 @@ Requirements for the Manual Lock/Exclude milestone.
 - [x] **UI-02**: User can re-optimize with updated lock/exclude selections without re-uploading CSVs
 - [x] **UI-03**: Locked cards are visually marked in lineup output confirming constraints took effect
 - [x] **UI-04**: Lock/exclude state resets automatically when new CSVs are uploaded
-- [ ] **UI-05**: User can clear all locks and excludes with a single button
-- [ ] **UI-06**: App shows count of active locks and excludes above the Optimize button
+- [x] **UI-05**: User can clear all locks and excludes with a single button
+- [x] **UI-06**: App shows count of active locks and excludes above the Optimize button
 
 ## v1.2 Requirements
 
@@ -69,8 +69,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | UI-02 | Phase 5 | Complete |
 | UI-01 | Phase 6 | Complete |
 | UI-03 | Phase 6 | Complete |
-| UI-05 | Phase 7 | Pending |
-| UI-06 | Phase 7 | Pending |
+| UI-05 | Phase 7 | Complete |
+| UI-06 | Phase 7 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 12 total
