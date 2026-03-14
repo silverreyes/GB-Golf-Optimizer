@@ -69,7 +69,12 @@ Plans:
   1. After uploading CSVs, user sees a table of all eligible cards with a lock control and an exclude control per row
   2. After optimizing, locked cards in the lineup output are visually distinguished so the user can confirm the constraint took effect
   3. Lock and exclude toggles persist through a re-optimize cycle — selections made before optimizing are still active after results render
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 06-01-PLAN.md — Test scaffolding: 10 failing tests for UI-01 and UI-03 (TDD wave 0)
+- [ ] 06-02-PLAN.md — Player pool table, checkbox parsing in /reoptimize route, index route template vars (UI-01)
+- [ ] 06-03-PLAN.md — Lock column in lineup output tables with lock icon (UI-03)
 
 ### Phase 7: Polish
 **Goal**: Users can manage their lock/exclude state efficiently without having to manually uncheck individual selections
@@ -88,10 +93,10 @@ Plans:
 | 2. Optimization Engine | v1.0 | 3/3 | Complete | 2026-03-13 |
 | 3. Web Application and Deployment | v1.0 | 3/3 | Complete | 2026-03-13 |
 | 4. Constraint Foundation | v1.1 | 3/3 | Complete | 2026-03-14 |
-| 5. Serialization and Re-Optimize Route | 2/2 | Complete   | 2026-03-14 | - |
-| 6. Lock/Exclude UI | v1.1 | 0/? | Not started | - |
+| 5. Serialization and Re-Optimize Route | v1.1 | 2/2 | Complete | 2026-03-14 |
+| 6. Lock/Exclude UI | v1.1 | 0/3 | Not started | - |
 | 7. Polish | v1.1 | 0/? | Not started | - |
 
 ---
 *Roadmap created: 2026-03-13*
-*Last updated: 2026-03-14 after Phase 5 planning (2 plans created)*
+*Last updated: 2026-03-14 after Phase 6 planning (3 plans created)*
