@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from gbgolf.data.models import Card
+from gbgolf.optimizer.engine import _solve_one_lineup
 
 
 @dataclass
@@ -29,6 +30,10 @@ class OptimizationResult:
 def optimize(valid_cards: list, contests: list) -> OptimizationResult:
     """Generate optimal lineups for each contest.
 
+    For each contest, generates up to max_entries lineups by iteratively
+    calling _solve_one_lineup. Cards used in previous lineups are excluded
+    from the pool for subsequent lineups (disjoint card usage).
+
     Args:
         valid_cards: list[Card] from the validation pipeline
         contests: list[ContestConfig] defining each contest's constraints
@@ -36,7 +41,40 @@ def optimize(valid_cards: list, contests: list) -> OptimizationResult:
     Returns:
         OptimizationResult with lineups per contest and any infeasibility notices
     """
-    raise NotImplementedError("optimize() not yet implemented")
+    lineups: dict = {}
+    infeasibility_notices: list = []
+    used_card_ids: set = set()
+
+    for config in contests:
+        contest_lineups: list = []
+
+        for entry_num in range(config.max_entries):
+            # Exclude cards already used in previous lineups (disjoint pool)
+            available = [c for c in valid_cards if id(c) not in used_card_ids]
+
+            result = _solve_one_lineup(available, config)
+
+            if result is None:
+                notice = (
+                    f"{config.name}: lineup {entry_num + 1} of {config.max_entries} "
+                    f"could not be built (infeasible)"
+                )
+                infeasibility_notices.append(notice)
+            else:
+                # Mark these cards as used
+                for card in result:
+                    used_card_ids.add(id(card))
+                contest_lineups.append(Lineup(contest=config.name, cards=result))
+
+        lineups[config.name] = contest_lineups
+
+    unused_cards = [c for c in valid_cards if id(c) not in used_card_ids]
+
+    return OptimizationResult(
+        lineups=lineups,
+        unused_cards=unused_cards,
+        infeasibility_notices=infeasibility_notices,
+    )
 
 
 __all__ = ["optimize", "OptimizationResult", "Lineup"]
