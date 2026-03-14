@@ -146,6 +146,7 @@
     <table>
       <thead>
         <tr>
+          <th>Lock</th>
           <th>Player</th>
           <th>Collection</th>
           <th>Salary</th>
@@ -156,6 +157,7 @@
       <tbody>
         {% for card in lineup.cards %}
         <tr>
+          <td>{% if locked_card_keys and (card.player, card.salary, card.multiplier, card.collection) in locked_card_keys %}🔒{% endif %}</td>
           <td>{{ card.player }}</td>
           <td>{{ card.collection }}</td>
           <td>${{ card.salary }}</td>
@@ -166,7 +168,7 @@
       </tbody>
       <tfoot>
         <tr>
-          <td colspan="2"><strong>Totals</strong></td>
+          <td colspan="3"><strong>Totals</strong></td>
           <td><strong>${{ lineup.total_salary }}</strong></td>
           <td></td>
           <td><strong>{{ "%.2f"|format(lineup.total_projected_score) }}</strong></td>
