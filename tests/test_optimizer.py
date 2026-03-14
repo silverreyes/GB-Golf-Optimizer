@@ -55,6 +55,13 @@ TIPS_CARDS = [
     make_card("Tony Finau",           8000, 1.0, "Core",              57.0),
     make_card("Matt Fitzpatrick",     8500, 1.1, "Core",              61.2),
     make_card("Wyndham Clark",        8000, 1.0, "Weekly Collection", 55.0),
+    # 6 extra cards so 3 disjoint 6-card lineups are feasible (3 x 6 = 18 cards minimum)
+    make_card("Patrick Cantlay",      8500, 1.1, "Core",              59.0),
+    make_card("Tyrrell Hatton",       8000, 1.0, "Core",              56.0),
+    make_card("Sam Burns",            8000, 1.0, "Core",              54.0),
+    make_card("Russell Henley",       8000, 1.0, "Core",              53.0),
+    make_card("Keegan Bradley",       8000, 1.0, "Core",              52.0),
+    make_card("Hideki Matsuyama",     9000, 1.1, "Core",              62.0),
 ]
 
 # ---------------------------------------------------------------------------
@@ -80,10 +87,11 @@ ALL_CONTESTS = [
     ),
 ]
 
-# 25 unique cards for multi-contest tests (disjoint card pools needed)
+# 35 unique cards for multi-contest tests: enough for 3 Tips lineups (3x6=18) plus
+# 2 Intermediate Tee lineups (2x5=10) with 7 cards unused (18+10+7=35)
 ALL_CARDS = [
     make_card(f"Player {i:02d}", 8000 + (i * 200), 1.0 + (i * 0.05), "Core", 55.0 + i)
-    for i in range(20)
+    for i in range(30)
 ] + [
     make_card(f"Weekly Player {i:02d}", 9000 + (i * 150), 1.1 + (i * 0.05), "Weekly Collection", 58.0 + i)
     for i in range(5)
