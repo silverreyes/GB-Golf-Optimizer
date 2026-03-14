@@ -58,24 +58,24 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LOCK-01 | — | Pending |
-| LOCK-02 | — | Pending |
-| LOCK-03 | — | Pending |
-| LOCK-04 | — | Pending |
-| EXCL-01 | — | Pending |
-| EXCL-02 | — | Pending |
-| UI-01 | — | Pending |
-| UI-02 | — | Pending |
-| UI-03 | — | Pending |
-| UI-04 | — | Pending |
-| UI-05 | — | Pending |
-| UI-06 | — | Pending |
+| LOCK-01 | Phase 4 | Pending |
+| LOCK-02 | Phase 4 | Pending |
+| LOCK-03 | Phase 4 | Pending |
+| LOCK-04 | Phase 4 | Pending |
+| EXCL-01 | Phase 4 | Pending |
+| EXCL-02 | Phase 4 | Pending |
+| UI-04 | Phase 4 | Pending |
+| UI-02 | Phase 5 | Pending |
+| UI-01 | Phase 6 | Pending |
+| UI-03 | Phase 6 | Pending |
+| UI-05 | Phase 7 | Pending |
+| UI-06 | Phase 7 | Pending |
 
 **Coverage:**
 - v1.1 requirements: 12 total
-- Mapped to phases: 0
-- Unmapped: 12 ⚠️
+- Mapped to phases: 12
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-14*
-*Last updated: 2026-03-14 after initial definition*
+*Last updated: 2026-03-14 after v1.1 roadmap creation*

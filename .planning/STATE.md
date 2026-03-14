@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Manual Lock/Exclude
 status: planning
-stopped_at: defining requirements
+stopped_at: roadmap created, ready to plan Phase 4
 last_updated: "2026-03-14"
-last_activity: 2026-03-14 -- Milestone v1.1 started
+last_activity: 2026-03-14 -- v1.1 roadmap created (4 phases, 12 requirements mapped)
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,14 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-14)
 
 **Core value:** Generate the best possible cash contest lineups from the user's available player cards, maximizing expected score within salary and collection constraints.
-**Current focus:** Defining requirements for v1.1
+**Current focus:** Phase 4 — Constraint Foundation
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-14 — Milestone v1.1 started
+Phase: 4 of 7 (Constraint Foundation)
+Plan: — (not yet planned)
+Status: Ready to plan
+Last activity: 2026-03-14 — v1.1 roadmap created
+
+Progress: [░░░░░░░░░░] 0% (v1.1)
 
 ## Accumulated Context
 
@@ -36,10 +38,21 @@ Last activity: 2026-03-14 — Milestone v1.1 started
 
 All key decisions logged in PROJECT.md Key Decisions table.
 
+Recent decisions affecting current work:
+- Session architecture: Lock/exclude identifiers stored in Flask built-in cookie session (fits comfortably under 4KB). Card objects NOT stored in session — serialized to hidden form field instead.
+- Stable card key: Use composite (player, salary, multiplier, collection) key rather than Python id() — id() breaks across requests.
+- No new dependencies: Flask session + PuLP += constraint API + Jinja2 checkboxes covers all v1.1 needs without additions.
+
 ### Pending Todos
 
 None.
 
 ### Blockers/Concerns
 
-None.
+- Phase 4 risk: Lock constraint semantics in the multi-lineup sequential loop. Card-level locks can only fire once (card consumed). Golfer-level locks may become infeasible in lineup 2+ if golfer has only one card. See PITFALLS.md for full checklist.
+
+## Session Continuity
+
+Last session: 2026-03-14
+Stopped at: Roadmap written for v1.1 (Phases 4–7). Requirements mapped. Ready to run /gsd:plan-phase 4.
+Resume file: None
