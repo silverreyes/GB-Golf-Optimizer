@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-03 (optimize() orchestrator - all 33 tests GREEN)
-last_updated: "2026-03-14T00:20:39.747Z"
+stopped_at: Completed 03-01-PLAN.md (Flask web layer)
+last_updated: "2026-03-14T02:05:05.386Z"
 last_activity: 2026-03-14 -- Completed 02-01 (optimizer scaffold + RED baseline)
 progress:
   total_phases: 3
   completed_phases: 2
-  total_plans: 7
-  completed_plans: 7
+  total_plans: 10
+  completed_plans: 8
   percent: 71
 ---
 
@@ -57,6 +57,7 @@ Progress: [███████░░░] 71%
 | Phase 02-optimization-engine PP01 | 8min | 2 tasks | 4 files |
 | Phase 02-optimization-engine P02 | 10min | 1 tasks | 2 files |
 | Phase 02-optimization-engine P03 | 8min | 1 tasks | 1 files |
+| Phase 03-web-application-and-deployment P01 | 3min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -84,6 +85,10 @@ Recent decisions affecting current work:
 - [Phase 02-optimization-engine]: pulp.LpStatus string check and varValue > 0.5 for CBC result extraction
 - [Phase 02-optimization-engine]: Collection limits enforced as upper bounds only — 0 Weekly Collection cards per lineup is legal
 - [Phase 02-optimization-engine]: Test fixture bug: TIPS_CARDS expanded 12→18 and ALL_CARDS expanded 25→35 to satisfy disjoint pool requirements for lineup count tests
+- [Phase 03-web-application-and-deployment]: ProxyFix skipped in TESTING mode to avoid Flask test client URL generation conflicts
+- [Phase 03-web-application-and-deployment]: Windows-safe temp file pattern: write with file.save() inside with-block, use path outside after file is closed
+- [Phase 03-web-application-and-deployment]: contest_order as Jinja2 list to guarantee The Tips before The Intermediate Tee display order
+- [Phase 03-web-application-and-deployment]: CONTESTS list loaded once at app factory startup and stored in app.config to avoid per-request config parsing
 
 ### Pending Todos
 
@@ -96,6 +101,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-14T00:16:37.916Z
-Stopped at: Completed 02-03 (optimize() orchestrator - all 33 tests GREEN)
+Last session: 2026-03-14T02:05:05.383Z
+Stopped at: Completed 03-01-PLAN.md (Flask web layer)
 Resume file: None

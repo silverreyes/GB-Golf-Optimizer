@@ -28,8 +28,8 @@
 
 ### Display
 
-- [ ] **DISP-01**: User can view all generated lineups in the browser, showing for each lineup: player name, collection, salary, multiplier, projected score, and lineup totals (total salary, total projected score)
-- [ ] **DISP-02**: Lineups are clearly grouped by contest (The Tips vs The Intermediate Tee)
+- [x] **DISP-01**: User can view all generated lineups in the browser, showing for each lineup: player name, collection, salary, multiplier, projected score, and lineup totals (total salary, total projected score)
+- [x] **DISP-02**: Lineups are clearly grouped by contest (The Tips vs The Intermediate Tee)
 
 ### Deployment
 
@@ -80,8 +80,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DATA-01 | Phase 1 | Complete |
 | DATA-02 | Phase 1 | Complete |
 | DATA-03 | Phase 1 | Complete |
-| DISP-01 | Phase 3 | Pending |
-| DISP-02 | Phase 3 | Pending |
+| DISP-01 | Phase 3 | Complete |
+| DISP-02 | Phase 3 | Complete |
 | DEPL-01 | Phase 3 | Pending |
 
 **Coverage:**
