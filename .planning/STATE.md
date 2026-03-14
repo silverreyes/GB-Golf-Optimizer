@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 03-01-PLAN.md (Flask web layer)
-last_updated: "2026-03-14T02:05:05.386Z"
-last_activity: 2026-03-14 -- Completed 02-01 (optimizer scaffold + RED baseline)
+status: completed
+stopped_at: Completed 03-02-PLAN.md (VPS deployment configuration)
+last_updated: "2026-03-14T02:08:09.912Z"
+last_activity: 2026-03-13 -- Completed 03-02 (VPS deployment configuration)
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 10
-  completed_plans: 8
-  percent: 71
+  completed_plans: 9
+  percent: 90
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 
 ## Current Position
 
-Phase: 2 of 3 (Optimization Engine) — In Progress
-Plan: 1 of 3 in current phase (02-01 complete)
-Status: Phase 2 in progress — 02-01 (scaffold/RED baseline) complete; 02-02 (ILP core) next
-Last activity: 2026-03-14 -- Completed 02-01 (optimizer scaffold + RED baseline)
+Phase: 3 of 3 (Web Application and Deployment) — Complete
+Plan: 2 of 2 in current phase (03-02 complete)
+Status: All plans complete — deployment configuration files generated
+Last activity: 2026-03-13 -- Completed 03-02 (VPS deployment configuration)
 
-Progress: [███████░░░] 71%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Progress: [███████░░░] 71%
 | Phase 02-optimization-engine P02 | 10min | 1 tasks | 2 files |
 | Phase 02-optimization-engine P03 | 8min | 1 tasks | 1 files |
 | Phase 03-web-application-and-deployment P01 | 3min | 2 tasks | 7 files |
+| Phase 03-web-application-and-deployment P02 | 5min | 1 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -89,6 +90,8 @@ Recent decisions affecting current work:
 - [Phase 03-web-application-and-deployment]: Windows-safe temp file pattern: write with file.save() inside with-block, use path outside after file is closed
 - [Phase 03-web-application-and-deployment]: contest_order as Jinja2 list to guarantee The Tips before The Intermediate Tee display order
 - [Phase 03-web-application-and-deployment]: CONTESTS list loaded once at app factory startup and stored in app.config to avoid per-request config parsing
+- [Phase 03-web-application-and-deployment]: SCRIPT_NAME=/golf set as systemd Environment variable — Flask/Werkzeug reads it to generate correct URLs under /golf prefix
+- [Phase 03-web-application-and-deployment]: proxy_pass has no trailing slash so full /golf URI passes intact to Gunicorn; separate server_name block for gameblazers.silverreyes.net ensures zero interference with Open Claw
 
 ### Pending Todos
 
@@ -101,6 +104,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-14T02:05:05.383Z
-Stopped at: Completed 03-01-PLAN.md (Flask web layer)
+Last session: 2026-03-14T02:08:09.908Z
+Stopped at: Completed 03-02-PLAN.md (VPS deployment configuration)
 Resume file: None

@@ -33,7 +33,7 @@
 
 ### Deployment
 
-- [ ] **DEPL-01**: App is deployed and accessible via the Hostinger KVM 2 VPS (silverreyes.net or subdomain)
+- [x] **DEPL-01**: App is deployed and accessible via the Hostinger KVM 2 VPS (silverreyes.net or subdomain)
 
 ## v2 Requirements
 
@@ -82,7 +82,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DATA-03 | Phase 1 | Complete |
 | DISP-01 | Phase 3 | Complete |
 | DISP-02 | Phase 3 | Complete |
-| DEPL-01 | Phase 3 | Pending |
+| DEPL-01 | Phase 3 | Complete |
 
 **Coverage:**
 - v1 requirements: 15 total
