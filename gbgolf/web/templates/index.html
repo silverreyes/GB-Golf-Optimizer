@@ -230,6 +230,37 @@
       updateConstraintCount();
     });
   });
+  var sortState = { col: 3, asc: true };  // default: Player A-Z
+
+  function sortTable(colIndex) {
+    var asc = (sortState.col === colIndex) ? !sortState.asc : false;  // first click = descending
+    sortState = { col: colIndex, asc: asc };
+    var tbody = document.querySelector("#player-pool-section table tbody");
+    if (!tbody) return;
+    var rows = Array.from(tbody.querySelectorAll("tr"));
+    rows.sort(function(a, b) {
+      var aVal = a.cells[colIndex] ? a.cells[colIndex].dataset.sort : "";
+      var bVal = b.cells[colIndex] ? b.cells[colIndex].dataset.sort : "";
+      var aNum = parseFloat(aVal);
+      var bNum = parseFloat(bVal);
+      var cmp = (!isNaN(aNum) && !isNaN(bNum))
+        ? aNum - bNum
+        : (aVal || "").localeCompare(bVal || "");
+      return asc ? cmp : -cmp;
+    });
+    rows.forEach(function(r) { tbody.appendChild(r); });
+    updateSortIndicators(colIndex, asc);
+  }
+
+  function updateSortIndicators(activeCol, asc) {
+    document.querySelectorAll("#player-pool-section table thead th").forEach(function(th, i) {
+      th.textContent = th.textContent.replace(/\s*[▲▼]$/, "");
+      if (i === activeCol) {
+        th.textContent += " " + (asc ? "▲" : "▼");
+      }
+    });
+  }
+
   function updateConstraintCount() {
     var el = document.getElementById("constraint-count");
     if (!el) return;
@@ -261,6 +292,7 @@
     if (lockCb) lockCb.disabled = true;
   });
   updateConstraintCount();
+  updateSortIndicators(3, true);
 </script>
 
 </body>
