@@ -1,0 +1,19 @@
+[Unit]
+Description=GB Golf Optimizer (Gunicorn)
+After=network.target
+
+[Service]
+User=<deploy_user>
+Group=www-data
+WorkingDirectory=/path/to/GBGolfOptimizer
+Environment="PATH=/path/to/GBGolfOptimizer/venv/bin"
+Environment="SCRIPT_NAME=/golf"
+ExecStart=/path/to/GBGolfOptimizer/venv/bin/gunicorn \
+    --workers 2 \
+    --bind unix:/path/to/GBGolfOptimizer/gbgolf.sock \
+    --umask 007 \
+    wsgi:app
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

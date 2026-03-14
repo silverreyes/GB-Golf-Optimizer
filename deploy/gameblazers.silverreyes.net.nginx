@@ -1,0 +1,15 @@
+server {
+    listen 80;
+    server_name gameblazers.silverreyes.net;
+
+    # GB Golf Optimizer at /golf
+    # proxy_pass has NO trailing slash — full URI including /golf passes through to Gunicorn
+    # SCRIPT_NAME=/golf in systemd env tells Flask/Werkzeug where the app is mounted
+    location /golf {
+        include proxy_params;
+        proxy_pass http://unix:/path/to/GBGolfOptimizer/gbgolf.sock;
+        proxy_set_header X-Forwarded-Prefix /golf;
+    }
+
+    # Future: /nfl location block for NFL optimizer
+}
