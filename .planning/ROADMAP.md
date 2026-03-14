@@ -94,7 +94,7 @@ Plans:
 | 3. Web Application and Deployment | v1.0 | 3/3 | Complete | 2026-03-13 |
 | 4. Constraint Foundation | v1.1 | 3/3 | Complete | 2026-03-14 |
 | 5. Serialization and Re-Optimize Route | v1.1 | 2/2 | Complete | 2026-03-14 |
-| 6. Lock/Exclude UI | v1.1 | 1/3 | In Progress | - |
+| 6. Lock/Exclude UI | 2/3 | In Progress|  | - |
 | 7. Polish | v1.1 | 0/? | Not started | - |
 
 ---

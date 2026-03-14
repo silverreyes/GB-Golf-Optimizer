@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Manual Lock/Exclude
 status: in_progress
-stopped_at: Completed 06-01-PLAN.md
-last_updated: "2026-03-14T18:30:00.000Z"
-last_activity: "2026-03-14 — Plan 06-01 complete: 10 failing RED tests for Phase 6 UI behaviours (player pool table, checkboxes, lock column)"
+stopped_at: Completed 06-02-PLAN.md
+last_updated: "2026-03-14T18:30:06.000Z"
+last_activity: "2026-03-14 — Plan 06-02 complete: 7 UI-01 tests GREEN; player pool table + checkbox parsing implemented"
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 8
-  completed_plans: 6
-  percent: 75
+  completed_plans: 7
+  percent: 88
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-14)
 
 **Core value:** Generate the best possible cash contest lineups from the user's available player cards, maximizing expected score within salary and collection constraints.
-**Current focus:** Phase 6 — Lock/Exclude UI (Plan 01 complete, Plans 02-03 pending)
+**Current focus:** Phase 6 — Lock/Exclude UI (Plans 01-02 complete, Plan 03 pending)
 
 ## Current Position
 
 Phase: 6 of 7 (Lock/Exclude UI) — In Progress
-Plan: 1 of 3 complete (Plan 01 done — RED tests; Plan 02, Plan 03 pending)
-Status: Phase 6 Plan 01 complete — ready for Plan 02
-Last activity: 2026-03-14 — Plan 06-01 complete: 10 failing RED tests for Phase 6 UI behaviours (player pool table, checkboxes, lock column)
+Plan: 2 of 3 complete (Plans 01-02 done — RED tests + UI-01 implementation; Plan 03 pending)
+Status: Phase 6 Plan 02 complete — ready for Plan 03
+Last activity: 2026-03-14 — Plan 06-02 complete: 7 UI-01 tests GREEN; player pool table + checkbox parsing implemented
 
-Progress: [███████▌░░] 75% (v1.1, 1/3 Phase 6 plans done)
+Progress: [█████████░] 88% (v1.1, 2/3 Phase 6 plans done)
 
 ## Accumulated Context
 
@@ -57,6 +57,8 @@ Recent decisions affecting current work:
 - [Phase 05-serialization-and-re-optimize-route]: Hidden card_pool carried in both standalone #card-pool-data input and inside #reoptimize-form for belt-and-suspenders extensibility
 - [Phase 06-lock-exclude-ui]: test_nonlocked_card_blank_lock_column asserts both Lock header presence AND no icon — double assertion keeps test RED today and guards correctness post-Plan 03
 - [Phase 06-lock-exclude-ui]: Lock icon verified as \U0001f512 Unicode escape in test assert strings for encoding portability
+- [Phase 06]: _parse_card_keys() defined inline in reoptimize() to keep helper co-located with its only caller
+- [Phase 06]: check_feasibility called per contest config in a loop; ConstraintSet built from parsed form values directly (not session re-read)
 
 ### Pending Todos
 
@@ -68,6 +70,6 @@ None — Phase 4 multi-lineup lock semantics resolved via fires-once tracking.
 
 ## Session Continuity
 
-Last session: 2026-03-14T18:30:00.000Z
-Stopped at: Completed 06-01-PLAN.md
-Resume file: .planning/phases/06-lock-exclude-ui/06-02-PLAN.md
+Last session: 2026-03-14T18:31:24.265Z
+Stopped at: Completed 06-02-PLAN.md
+Resume file: .planning/phases/06-lock-exclude-ui/06-03-PLAN.md
