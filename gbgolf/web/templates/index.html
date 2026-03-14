@@ -58,6 +58,7 @@
 
     <details id="player-pool-section">
       <summary>Lock / Exclude Players</summary>
+      <button type="button" id="clear-all-btn" onclick="clearAllCheckboxes()">Clear All</button>
       <table>
         <thead>
           <tr>
@@ -117,6 +118,7 @@
       </table>
     </details>
 
+    <div id="constraint-count" style="display:none; margin-bottom:0.5rem; font-weight:bold;"></div>
     <button type="submit">Re-Optimize</button>
   </form>
   {% endif %}
@@ -212,6 +214,12 @@
       var row = lockCb.closest("tr");
       var excludeCb = row.querySelector(".exclude-cb");
       if (excludeCb) excludeCb.disabled = lockCb.checked;
+      updateConstraintCount();
+    });
+  });
+  document.querySelectorAll(".lock-golfer-cb").forEach(function(lockGolferCb) {
+    lockGolferCb.addEventListener("change", function() {
+      updateConstraintCount();
     });
   });
   document.querySelectorAll(".exclude-cb").forEach(function(excludeCb) {
@@ -219,8 +227,28 @@
       var row = excludeCb.closest("tr");
       var lockCb = row.querySelector(".lock-cb");
       if (lockCb) lockCb.disabled = excludeCb.checked;
+      updateConstraintCount();
     });
   });
+  function updateConstraintCount() {
+    var el = document.getElementById("constraint-count");
+    if (!el) return;
+    var locks = document.querySelectorAll(".lock-cb:checked, .lock-golfer-cb:checked").length;
+    var excludes = document.querySelectorAll(".exclude-cb:checked").length;
+    if (locks === 0 && excludes === 0) {
+      el.style.display = "none";
+    } else {
+      el.textContent = "Locks: " + locks + " | Excludes: " + excludes;
+      el.style.display = "";
+    }
+  }
+  function clearAllCheckboxes() {
+    document.querySelectorAll(".lock-cb, .lock-golfer-cb, .exclude-cb").forEach(function(cb) {
+      cb.checked = false;
+      cb.disabled = false;
+    });
+    updateConstraintCount();
+  }
   // Initialize disabled state for pre-checked checkboxes on page load
   document.querySelectorAll(".lock-cb:checked").forEach(function(lockCb) {
     var row = lockCb.closest("tr");
@@ -232,6 +260,7 @@
     var lockCb = row && row.querySelector(".lock-cb");
     if (lockCb) lockCb.disabled = true;
   });
+  updateConstraintCount();
 </script>
 
 </body>
