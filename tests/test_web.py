@@ -335,14 +335,15 @@ def test_player_pool_table_columns(client):
     response = _post_csvs(client, SAMPLE_ROSTER_CSV, SAMPLE_PROJECTIONS_CSV)
     assert response.status_code == 200
     html = response.data.decode("utf-8")
-    assert "<th>Lock</th>" in html
-    assert "<th>Lock Golfer</th>" in html
-    assert "<th>Exclude</th>" in html
-    assert "<th>Player</th>" in html
-    assert "<th>Collection</th>" in html
-    assert "<th>Salary</th>" in html
-    assert "<th>Multiplier</th>" in html
-    assert "<th>Proj Score</th>" in html
+    # Headers now have onclick attributes; check for text content within th elements
+    assert ">Lock</th>" in html
+    assert ">Lock Golfer</th>" in html
+    assert ">Exclude</th>" in html
+    assert ">Player</th>" in html
+    assert ">Collection</th>" in html
+    assert ">Salary</th>" in html
+    assert ">Multiplier</th>" in html
+    assert ">Proj Score</th>" in html
 
 
 def test_lock_exclude_checkboxes_in_form(client):
