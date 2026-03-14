@@ -5,6 +5,7 @@ requires-python = ">=3.10"
 dependencies = [
     "pydantic>=2.0",
     "python-dateutil>=2.9",
+    "pulp>=3.3.0",
 ]
 
 [project.optional-dependencies]
