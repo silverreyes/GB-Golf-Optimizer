@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-stopped_at: Completed 02-01 (optimizer scaffold + RED baseline)
-last_updated: "2026-03-14T00:06:41.904Z"
-last_activity: 2026-03-13 -- Completed 01-04 (pipeline integration + CLI)
+status: executing
+stopped_at: Completed 02-02 (ILP core implementation)
+last_updated: "2026-03-14T00:10:59.263Z"
+last_activity: 2026-03-14 -- Completed 02-01 (optimizer scaffold + RED baseline)
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 7
-  completed_plans: 5
+  completed_plans: 6
   percent: 71
 ---
 
@@ -55,6 +55,7 @@ Progress: [███████░░░] 71%
 | Phase 01-data-foundation P03 | 8 | 2 tasks | 3 files |
 | Phase 01-data-foundation P04 | 15min | 2 tasks | 4 files |
 | Phase 02-optimization-engine PP01 | 8min | 2 tasks | 4 files |
+| Phase 02-optimization-engine P02 | 10min | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,8 @@ Recent decisions affecting current work:
 - [Phase 02-optimization-engine]: Lineup.__post_init__ computes totals eagerly (total_salary, total_projected_score, total_effective_value) for downstream reuse
 - [Phase 02-optimization-engine]: Optimizer tests use module-level Card objects (not CSV pipeline) — fast and isolated from I/O
 - [Phase 02-optimization-engine]: NotImplementedError propagates naturally in test stubs (not wrapped) — true RED state, not hidden pass
+- [Phase 02-optimization-engine]: pulp.LpStatus string check and varValue > 0.5 for CBC result extraction
+- [Phase 02-optimization-engine]: Collection limits enforced as upper bounds only — 0 Weekly Collection cards per lineup is legal
 
 ### Pending Todos
 
@@ -91,6 +94,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-14T00:06:41.901Z
-Stopped at: Completed 02-01 (optimizer scaffold + RED baseline)
+Last session: 2026-03-14T00:10:59.259Z
+Stopped at: Completed 02-02 (ILP core implementation)
 Resume file: None
