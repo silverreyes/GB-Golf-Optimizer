@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Manual Lock/Exclude
 status: executing
-stopped_at: "Checkpoint: human-verify — Task 1 complete, awaiting browser verification of Re-Optimize flow"
-last_updated: "2026-03-14T08:32:06.368Z"
+stopped_at: Completed 05-02-PLAN.md — Phase 5 fully complete and browser-verified
+last_updated: "2026-03-14T08:41:55.258Z"
 last_activity: "2026-03-14 — Plan 05-01 complete: card pool serialization helpers and POST /reoptimize route"
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 5
   completed_plans: 5
-  percent: 80
+  percent: 100
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-14)
 
 **Core value:** Generate the best possible cash contest lineups from the user's available player cards, maximizing expected score within salary and collection constraints.
-**Current focus:** Phase 5 — Serialization and Re-optimize Route
+**Current focus:** Phase 6 — (next phase, Phase 5 complete)
 
 ## Current Position
 
-Phase: 5 of 7 (Serialization and Re-optimize Route) — In Progress
-Plan: 1 of 2 complete (Plan 01 done, Plan 02 pending)
-Status: In Progress
-Last activity: 2026-03-14 — Plan 05-01 complete: card pool serialization helpers and POST /reoptimize route
+Phase: 5 of 7 (Serialization and Re-optimize Route) — Complete
+Plan: 2 of 2 complete (Plan 01 done, Plan 02 done)
+Status: Phase 5 complete — ready for Phase 6
+Last activity: 2026-03-14 — Plan 05-02 complete: Re-Optimize form, hidden card_pool field, JS overlay listener; browser-verified
 
-Progress: [████████░░] 80% (v1.1, 1/2 Phase 5 plans done)
+Progress: [██████████] 100% (v1.1, 2/2 Phase 5 plans done)
 
 ## Accumulated Context
 
@@ -54,6 +54,7 @@ Recent decisions affecting current work:
 - [Phase 05-serialization-and-re-optimize-route]: Card pool stored as JSON in hidden form field rather than Flask session (avoids 4KB cookie limit)
 - [Phase 05-serialization-and-re-optimize-route]: Two button-rendering tests intentionally RED until Plan 02 adds template changes
 - [Phase 05-serialization-and-re-optimize-route]: Re-Optimize form uses | e filter (HTML-entity-escape) for card_pool JSON in attribute context; null-guarded JS listener handles conditional DOM element
+- [Phase 05-serialization-and-re-optimize-route]: Hidden card_pool carried in both standalone #card-pool-data input and inside #reoptimize-form for belt-and-suspenders extensibility
 
 ### Pending Todos
 
@@ -65,6 +66,6 @@ None — Phase 4 multi-lineup lock semantics resolved via fires-once tracking.
 
 ## Session Continuity
 
-Last session: 2026-03-14T08:31:52.319Z
-Stopped at: Checkpoint: human-verify — Task 1 complete, awaiting browser verification of Re-Optimize flow
+Last session: 2026-03-14T08:41:39.878Z
+Stopped at: Completed 05-02-PLAN.md — Phase 5 fully complete and browser-verified
 Resume file: None

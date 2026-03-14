@@ -51,7 +51,7 @@ completed: 2026-03-14
 - **Duration:** ~5 min
 - **Started:** 2026-03-14T08:28:47Z
 - **Completed:** 2026-03-14T08:31:16Z
-- **Tasks:** 1 of 2 (Task 2 is a human-verify checkpoint, pending)
+- **Tasks:** 2 of 2
 - **Files modified:** 1
 
 ## Accomplishments
@@ -65,8 +65,9 @@ completed: 2026-03-14
 Each task was committed atomically:
 
 1. **Task 1: Add hidden field and Re-Optimize form to index.html** - `0c8e46c` (feat)
+2. **Task 2: Checkpoint — Verify Re-Optimize flow end-to-end in browser** - human-approved (no commit needed)
 
-**Plan metadata:** (pending — awaiting human-verify checkpoint approval)
+**Plan metadata:** `e022eb6` (docs: complete Re-Optimize form plan)
 
 ## Files Created/Modified
 - `gbgolf/web/templates/index.html` - Added Re-Optimize form, hidden card_pool input, and JS overlay listener
@@ -86,9 +87,9 @@ None.
 None - no external service configuration required.
 
 ## Next Phase Readiness
-- Phase 5 fully implemented — serialization helpers, POST /reoptimize route, and Re-Optimize UI form all complete
-- Human browser verification pending (checkpoint:human-verify) to confirm overlay triggers and results reload correctly
-- After checkpoint approval, project advances to Phase 6
+- Phase 5 fully implemented and browser-verified — serialization helpers, POST /reoptimize route, and Re-Optimize UI form all complete
+- Human verified: Re-Optimize button appears above lineups, overlay triggers on click, results reload identically, button absent on GET /
+- Project advances to Phase 6
 
 ---
 *Phase: 05-serialization-and-re-optimize-route*
