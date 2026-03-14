@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: "Checkpoint:human-verify in 01-data-foundation 01-04-PLAN.md (Tasks 1+2 complete, awaiting Task 3 human verification)"
-last_updated: "2026-03-13T23:09:16.962Z"
+stopped_at: Completed 02-01 (optimizer scaffold + RED baseline)
+last_updated: "2026-03-14T00:06:41.904Z"
 last_activity: 2026-03-13 -- Completed 01-04 (pipeline integration + CLI)
 progress:
   total_phases: 3
   completed_phases: 1
-  total_plans: 4
-  completed_plans: 4
-  percent: 33
+  total_plans: 7
+  completed_plans: 5
+  percent: 71
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-13)
 
 **Core value:** Generate the best possible cash contest lineups from the user's available player cards, maximizing expected score within salary and collection constraints.
-**Current focus:** Phase 1: Data Foundation
+**Current focus:** Phase 2: Optimization Engine
 
 ## Current Position
 
-Phase: 1 of 3 (Data Foundation) — COMPLETE
-Plan: 4 of 4 in current phase (all plans complete)
-Status: Phase 1 complete — ready for Phase 2 (Optimizer)
-Last activity: 2026-03-13 -- Completed 01-04 (pipeline integration + CLI)
+Phase: 2 of 3 (Optimization Engine) — In Progress
+Plan: 1 of 3 in current phase (02-01 complete)
+Status: Phase 2 in progress — 02-01 (scaffold/RED baseline) complete; 02-02 (ILP core) next
+Last activity: 2026-03-14 -- Completed 02-01 (optimizer scaffold + RED baseline)
 
-Progress: [███░░░░░░░] 33%
+Progress: [███████░░░] 71%
 
 ## Performance Metrics
 
@@ -54,6 +54,7 @@ Progress: [███░░░░░░░] 33%
 | Phase 01-data-foundation P02 | 6 | 2 tasks | 5 files |
 | Phase 01-data-foundation P03 | 8 | 2 tasks | 3 files |
 | Phase 01-data-foundation P04 | 15min | 2 tasks | 4 files |
+| Phase 02-optimization-engine PP01 | 8min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -74,6 +75,10 @@ Recent decisions affecting current work:
 - [Phase 01-data-foundation P04]: Pool-size guard in validate_pipeline() uses min(c.roster_size for c in contests) — fails fast before optimizer receives unusable data
 - [Phase 01-data-foundation P04]: format_* functions return strings (not print) — __main__.py controls all I/O, keeps formatters pure/testable
 - [Phase 01-data-foundation P04]: total_parsed = valid + excluded — projection_warnings are data quality notes (skipped CSV rows), not missing cards
+- [Phase 02-optimization-engine]: PuLP 3.3.0 chosen as ILP solver — pure Python, no binary dependency, works on Windows
+- [Phase 02-optimization-engine]: Lineup.__post_init__ computes totals eagerly (total_salary, total_projected_score, total_effective_value) for downstream reuse
+- [Phase 02-optimization-engine]: Optimizer tests use module-level Card objects (not CSV pipeline) — fast and isolated from I/O
+- [Phase 02-optimization-engine]: NotImplementedError propagates naturally in test stubs (not wrapped) — true RED state, not hidden pass
 
 ### Pending Todos
 
@@ -86,6 +91,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-13T23:25:00.000Z
-Stopped at: Checkpoint:human-verify in 01-data-foundation 01-04-PLAN.md (Tasks 1+2 complete, awaiting Task 3 human verification)
+Last session: 2026-03-14T00:06:41.901Z
+Stopped at: Completed 02-01 (optimizer scaffold + RED baseline)
 Resume file: None

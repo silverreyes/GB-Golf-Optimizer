@@ -12,12 +12,12 @@
 
 ### Optimization
 
-- [ ] **OPT-01**: Optimizer generates 3 optimal lineups for The Tips contest (6 golfers per lineup, salary $30,000–$64,000, max 3 Weekly Collection cards, max 6 Core cards)
-- [ ] **OPT-02**: Optimizer generates 2 optimal lineups for The Intermediate Tee contest (5 golfers per lineup, salary $20,000–$52,000, max 2 Weekly Collection cards, max 5 Core cards)
-- [ ] **OPT-03**: Cash contest (The Tips) is fully optimized first; Intermediate Tee lineups are built using only cards not already assigned to Tips lineups
-- [ ] **OPT-04**: Each card may appear in at most one lineup across all contests (cards are locked per lineup)
+- [x] **OPT-01**: Optimizer generates 3 optimal lineups for The Tips contest (6 golfers per lineup, salary $30,000–$64,000, max 3 Weekly Collection cards, max 6 Core cards)
+- [x] **OPT-02**: Optimizer generates 2 optimal lineups for The Intermediate Tee contest (5 golfers per lineup, salary $20,000–$52,000, max 2 Weekly Collection cards, max 5 Core cards)
+- [x] **OPT-03**: Cash contest (The Tips) is fully optimized first; Intermediate Tee lineups are built using only cards not already assigned to Tips lineups
+- [x] **OPT-04**: Each card may appear in at most one lineup across all contests (cards are locked per lineup)
 - [x] **OPT-05**: Effective card value is calculated as projected_score × multiplier
-- [ ] **OPT-06**: Optimizer respects both the salary floor (minimum) and salary cap (maximum) for each contest
+- [x] **OPT-06**: Optimizer respects both the salary floor (minimum) and salary cap (maximum) for each contest
 - [x] **OPT-07**: Contest parameters (salary cap, salary floor, roster size, max entries, collection limits) are stored in an editable JSON config file
 
 ### Data Integrity
@@ -70,12 +70,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | UPLD-01 | Phase 1 | Complete |
 | UPLD-02 | Phase 1 | Complete |
-| OPT-01 | Phase 2 | Pending |
-| OPT-02 | Phase 2 | Pending |
-| OPT-03 | Phase 2 | Pending |
-| OPT-04 | Phase 2 | Pending |
+| OPT-01 | Phase 2 | Complete |
+| OPT-02 | Phase 2 | Complete |
+| OPT-03 | Phase 2 | Complete |
+| OPT-04 | Phase 2 | Complete |
 | OPT-05 | Phase 1 | Complete |
-| OPT-06 | Phase 2 | Pending |
+| OPT-06 | Phase 2 | Complete |
 | OPT-07 | Phase 1 | Complete |
 | DATA-01 | Phase 1 | Complete |
 | DATA-02 | Phase 1 | Complete |
