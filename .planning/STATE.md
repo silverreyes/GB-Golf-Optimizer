@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: Polish
-status: in-progress
-stopped_at: Completed 07-01-PLAN.md
-last_updated: "2026-03-14T20:17:34.801Z"
+milestone: v1.1
+milestone_name: Manual Lock/Exclude
+status: completed
+stopped_at: Completed 07-02-PLAN.md
+last_updated: "2026-03-14T20:21:48.608Z"
 last_activity: "2026-03-14 — Plan 07-01 complete: UI-05/UI-06 constraint count div + updateConstraintCount() JS wired; 4 new tests GREEN, sort headers RED scaffold for Plan 02"
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 10
-  completed_plans: 9
+  completed_plans: 10
   percent: 90
 ---
 
@@ -61,6 +61,8 @@ Recent decisions affecting current work:
 - [Phase 06]: check_feasibility called per contest config in a loop; ConstraintSet built from parsed form values directly (not session re-read)
 - [Phase 06-lock-exclude-ui]: Lock column renders lock icon via Jinja2 set membership against locked_card_keys; tfoot colspan bumped from 2 to 3
 - [Phase 07-polish]: constraint-count element inside show_results block; .lock-golfer-cb listener added; test_sort_headers_rendered intentionally RED for Plan 02
+- [Phase 07-polish]: th.textContent setter used for sort indicator updates — safe because onclick is an HTML attribute not a JS child node property
+- [Phase 07-polish]: data-sort uses raw values (no dollar prefix for salary, 0/1 for checkboxes) enabling parseFloat numeric sort
 
 ### Pending Todos
 
@@ -72,6 +74,6 @@ None — Phase 4 multi-lineup lock semantics resolved via fires-once tracking.
 
 ## Session Continuity
 
-Last session: 2026-03-14T20:17:34.798Z
-Stopped at: Completed 07-01-PLAN.md
+Last session: 2026-03-14T20:21:48.605Z
+Stopped at: Completed 07-02-PLAN.md
 Resume file: None

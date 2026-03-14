@@ -25,7 +25,7 @@ See: `.planning/milestones/v1.0-ROADMAP.md` for full phase details.
 - [x] **Phase 4: Constraint Foundation** — Stable card identity, lock/exclude ILP constraints, pre-solve diagnostics, and session reset (completed 2026-03-14)
 - [x] **Phase 5: Serialization and Re-Optimize Route** — Card serialization helpers and POST /reoptimize endpoint (completed 2026-03-14)
 - [x] **Phase 6: Lock/Exclude UI** — Player pool table with per-card controls, Re-Optimize button, and locked card markers in output (completed 2026-03-14)
-- [ ] **Phase 7: Polish** — Clear-all button and active lock/exclude count display
+- [x] **Phase 7: Polish** — Clear-all button and active lock/exclude count display (completed 2026-03-14)
 
 ## Phase Details
 
@@ -99,7 +99,7 @@ Plans:
 | 4. Constraint Foundation | v1.1 | 3/3 | Complete | 2026-03-14 |
 | 5. Serialization and Re-Optimize Route | v1.1 | 2/2 | Complete | 2026-03-14 |
 | 6. Lock/Exclude UI | v1.1 | 3/3 | Complete | 2026-03-14 |
-| 7. Polish | v1.1 | 0/2 | Not started | - |
+| 7. Polish | 2/2 | Complete   | 2026-03-14 | - |
 
 ---
 *Roadmap created: 2026-03-13*
