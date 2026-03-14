@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Manual Lock/Exclude
-status: in_progress
-stopped_at: Completed 06-02-PLAN.md
-last_updated: "2026-03-14T18:30:06.000Z"
+status: completed
+stopped_at: Completed 06-03-PLAN.md
+last_updated: "2026-03-14T18:34:11.293Z"
 last_activity: "2026-03-14 — Plan 06-02 complete: 7 UI-01 tests GREEN; player pool table + checkbox parsing implemented"
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 8
-  completed_plans: 7
-  percent: 88
+  completed_plans: 8
+  percent: 100
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-14)
 
 **Core value:** Generate the best possible cash contest lineups from the user's available player cards, maximizing expected score within salary and collection constraints.
-**Current focus:** Phase 6 — Lock/Exclude UI (Plans 01-02 complete, Plan 03 pending)
+**Current focus:** Phase 6 complete — Lock/Exclude UI all 3 plans done; v1.1 milestone delivered
 
 ## Current Position
 
-Phase: 6 of 7 (Lock/Exclude UI) — In Progress
-Plan: 2 of 3 complete (Plans 01-02 done — RED tests + UI-01 implementation; Plan 03 pending)
-Status: Phase 6 Plan 02 complete — ready for Plan 03
-Last activity: 2026-03-14 — Plan 06-02 complete: 7 UI-01 tests GREEN; player pool table + checkbox parsing implemented
+Phase: 6 of 7 (Lock/Exclude UI) — Complete
+Plan: 3 of 3 complete (Plans 01-03 all done — RED tests + UI-01 + UI-03 lock column)
+Status: Phase 6 Plan 03 complete — Phase 6 fully done; v1.1 milestone complete
+Last activity: 2026-03-14 — Plan 06-03 complete: 3 UI-03 tests GREEN; Lock column in lineup tables with 🔒 icon via Jinja2 set membership
 
-Progress: [█████████░] 88% (v1.1, 2/3 Phase 6 plans done)
+Progress: [██████████] 100% (v1.1, 3/3 Phase 6 plans done)
 
 ## Accumulated Context
 
@@ -59,6 +59,7 @@ Recent decisions affecting current work:
 - [Phase 06-lock-exclude-ui]: Lock icon verified as \U0001f512 Unicode escape in test assert strings for encoding portability
 - [Phase 06]: _parse_card_keys() defined inline in reoptimize() to keep helper co-located with its only caller
 - [Phase 06]: check_feasibility called per contest config in a loop; ConstraintSet built from parsed form values directly (not session re-read)
+- [Phase 06-lock-exclude-ui]: Lock column renders lock icon via Jinja2 set membership against locked_card_keys; tfoot colspan bumped from 2 to 3
 
 ### Pending Todos
 
@@ -70,6 +71,6 @@ None — Phase 4 multi-lineup lock semantics resolved via fires-once tracking.
 
 ## Session Continuity
 
-Last session: 2026-03-14T18:31:24.265Z
-Stopped at: Completed 06-02-PLAN.md
-Resume file: .planning/phases/06-lock-exclude-ui/06-03-PLAN.md
+Last session: 2026-03-14T18:34:11.290Z
+Stopped at: Completed 06-03-PLAN.md
+Resume file: None
