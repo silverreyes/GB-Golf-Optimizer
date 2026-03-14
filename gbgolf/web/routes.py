@@ -116,6 +116,10 @@ def index():
             show_results=True,
             lock_reset=lock_reset,
             card_pool_json=card_pool_json,
+            card_pool=sorted(validation.valid_cards, key=lambda c: (c.player, -c.salary)),
+            locked_card_keys=set(),        # session just cleared — no locks on fresh upload
+            locked_golfer_set=set(),
+            excluded_card_keys=set(),
         )
 
     except ValueError as exc:

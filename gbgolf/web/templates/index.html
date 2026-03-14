@@ -53,12 +53,70 @@
   {% endif %}
 
   {% if show_results and card_pool_json %}
-  <input type="hidden" id="card-pool-data" name="card_pool" value="{{ card_pool_json | e }}" />
-  {% endif %}
-
-  {% if show_results and card_pool_json %}
   <form method="post" action="{{ url_for('main.reoptimize') }}" id="reoptimize-form">
     <input type="hidden" name="card_pool" value="{{ card_pool_json | e }}" />
+
+    <details id="player-pool-section">
+      <summary>Lock / Exclude Players</summary>
+      <table>
+        <thead>
+          <tr>
+            <th>Lock</th>
+            <th>Lock Golfer</th>
+            <th>Exclude</th>
+            <th>Player</th>
+            <th>Collection</th>
+            <th>Salary</th>
+            <th>Multiplier</th>
+            <th>Proj Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if card_pool %}
+          {% set ns = namespace(prev_player="") %}
+          {% for card in card_pool %}
+          <tr>
+            <td>
+              <input type="checkbox"
+                     name="lock_card"
+                     value="{{ card.player }}|{{ card.salary }}|{{ card.multiplier }}|{{ card.collection }}"
+                     class="lock-cb"
+                     {% if locked_card_keys and (card.player, card.salary, card.multiplier, card.collection) in locked_card_keys %}checked{% endif %}
+              />
+            </td>
+            <td>
+              {% if card.player != ns.prev_player %}
+              {% set ns.prev_player = card.player %}
+              <input type="checkbox"
+                     name="lock_golfer"
+                     value="{{ card.player }}"
+                     class="lock-golfer-cb"
+                     {% if locked_golfer_set and card.player in locked_golfer_set %}checked{% endif %}
+              />
+              {% else %}
+              <span class="lock-golfer-empty"></span>
+              {% endif %}
+            </td>
+            <td>
+              <input type="checkbox"
+                     name="exclude_card"
+                     value="{{ card.player }}|{{ card.salary }}|{{ card.multiplier }}|{{ card.collection }}"
+                     class="exclude-cb"
+                     {% if excluded_card_keys and (card.player, card.salary, card.multiplier, card.collection) in excluded_card_keys %}checked{% endif %}
+              />
+            </td>
+            <td>{{ card.player }}</td>
+            <td>{{ card.collection }}</td>
+            <td>${{ card.salary }}</td>
+            <td>{{ card.multiplier }}</td>
+            <td>{{ "%.2f"|format(card.projected_score or 0.0) }}</td>
+          </tr>
+          {% endfor %}
+          {% endif %}
+        </tbody>
+      </table>
+    </details>
+
     <button type="submit">Re-Optimize</button>
   </form>
   {% endif %}
@@ -147,6 +205,31 @@
       document.getElementById("loading-overlay").style.display = "flex";
     });
   }
+  document.querySelectorAll(".lock-cb").forEach(function(lockCb) {
+    lockCb.addEventListener("change", function() {
+      var row = lockCb.closest("tr");
+      var excludeCb = row.querySelector(".exclude-cb");
+      if (excludeCb) excludeCb.disabled = lockCb.checked;
+    });
+  });
+  document.querySelectorAll(".exclude-cb").forEach(function(excludeCb) {
+    excludeCb.addEventListener("change", function() {
+      var row = excludeCb.closest("tr");
+      var lockCb = row.querySelector(".lock-cb");
+      if (lockCb) lockCb.disabled = excludeCb.checked;
+    });
+  });
+  // Initialize disabled state for pre-checked checkboxes on page load
+  document.querySelectorAll(".lock-cb:checked").forEach(function(lockCb) {
+    var row = lockCb.closest("tr");
+    var excludeCb = row && row.querySelector(".exclude-cb");
+    if (excludeCb) excludeCb.disabled = true;
+  });
+  document.querySelectorAll(".exclude-cb:checked").forEach(function(excludeCb) {
+    var row = excludeCb.closest("tr");
+    var lockCb = row && row.querySelector(".lock-cb");
+    if (lockCb) lockCb.disabled = true;
+  });
 </script>
 
 </body>

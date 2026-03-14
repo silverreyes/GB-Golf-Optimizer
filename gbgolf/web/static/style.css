@@ -162,3 +162,9 @@ tbody tr:nth-child(even) {
   font-weight: 600;
   color: #1a3a1a;
 }
+
+.lock-golfer-empty {
+  display: block;
+  min-width: 1rem;  /* preserves column width alignment */
+  color: transparent;
+}
