@@ -315,3 +315,116 @@ def test_reoptimize_button_absent_on_get(client):
     assert response.status_code == 200
     html = response.data.decode("utf-8")
     assert 'id="reoptimize-form"' not in html
+
+
+# ---------------------------------------------------------------------------
+# Phase 06: UI-01 — Player pool table and /reoptimize checkbox parsing
+# ---------------------------------------------------------------------------
+
+
+def test_player_pool_section_rendered(client):
+    """POST CSVs → response HTML contains id='player-pool-section'."""
+    response = _post_csvs(client, SAMPLE_ROSTER_CSV, SAMPLE_PROJECTIONS_CSV)
+    assert response.status_code == 200
+    html = response.data.decode("utf-8")
+    assert 'id="player-pool-section"' in html
+
+
+def test_player_pool_table_columns(client):
+    """POST CSVs → player pool table contains all required column headers."""
+    response = _post_csvs(client, SAMPLE_ROSTER_CSV, SAMPLE_PROJECTIONS_CSV)
+    assert response.status_code == 200
+    html = response.data.decode("utf-8")
+    assert "<th>Lock</th>" in html
+    assert "<th>Lock Golfer</th>" in html
+    assert "<th>Exclude</th>" in html
+    assert "<th>Player</th>" in html
+    assert "<th>Collection</th>" in html
+    assert "<th>Salary</th>" in html
+    assert "<th>Multiplier</th>" in html
+    assert "<th>Proj Score</th>" in html
+
+
+def test_lock_exclude_checkboxes_in_form(client):
+    """POST CSVs → HTML contains lock_card and exclude_card inputs inside reoptimize-form."""
+    response = _post_csvs(client, SAMPLE_ROSTER_CSV, SAMPLE_PROJECTIONS_CSV)
+    assert response.status_code == 200
+    html = response.data.decode("utf-8")
+    # Inputs must exist somewhere in the HTML
+    assert 'name="lock_card"' in html
+    assert 'name="exclude_card"' in html
+    # The reoptimize-form must exist
+    form_start = html.index('id="reoptimize-form"')
+    # Both inputs must appear after the form start (inside the form)
+    assert html.index('name="lock_card"') > form_start
+    assert html.index('name="exclude_card"') > form_start
+
+
+def test_lock_golfer_first_row_only(client):
+    """POST CSVs → count of lock_golfer checkboxes equals unique player count (30).
+
+    Every player in _VALID_PLAYERS has a unique name, so there should be exactly
+    one lock_golfer checkbox per player (30 total) and also 30 lock_card checkboxes
+    (one per card row). Both counts should be less than the total number of td cells.
+    """
+    response = _post_csvs(client, SAMPLE_ROSTER_CSV, SAMPLE_PROJECTIONS_CSV)
+    assert response.status_code == 200
+    html = response.data.decode("utf-8")
+    lock_golfer_count = html.count('name="lock_golfer"')
+    lock_card_count = html.count('name="lock_card"')
+    assert lock_golfer_count == 30
+    assert lock_card_count == 30
+    # Sanity: both are less than total <td> cell count
+    td_count = html.count("<td")
+    assert lock_golfer_count < td_count
+
+
+def test_reoptimize_parses_lock_checkboxes(client):
+    """POST /reoptimize with lock_card → session['locked_cards'] contains parsed entry."""
+    card_pool_json = _build_card_pool_json()
+    response = client.post(
+        "/reoptimize",
+        data={
+            "card_pool": card_pool_json,
+            "lock_card": "Player A|11000|1.5|Core",
+        },
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 200
+    with client.session_transaction() as sess:
+        locked = sess.get("locked_cards", [])
+    assert ["Player A", 11000, 1.5, "Core"] in locked
+
+
+def test_reoptimize_parses_exclude_checkboxes(client):
+    """POST /reoptimize with exclude_card → session['excluded_cards'] contains parsed entry."""
+    card_pool_json = _build_card_pool_json()
+    response = client.post(
+        "/reoptimize",
+        data={
+            "card_pool": card_pool_json,
+            "exclude_card": "Player B|10500|1.4|Core",
+        },
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 200
+    with client.session_transaction() as sess:
+        excluded = sess.get("excluded_cards", [])
+    assert ["Player B", 10500, 1.4, "Core"] in excluded
+
+
+def test_reoptimize_parses_lock_golfer(client):
+    """POST /reoptimize with lock_golfer → session['locked_golfers'] contains player name."""
+    card_pool_json = _build_card_pool_json()
+    response = client.post(
+        "/reoptimize",
+        data={
+            "card_pool": card_pool_json,
+            "lock_golfer": "Player C",
+        },
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 200
+    with client.session_transaction() as sess:
+        golfers = sess.get("locked_golfers", [])
+    assert "Player C" in golfers
