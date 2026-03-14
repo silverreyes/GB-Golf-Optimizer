@@ -40,7 +40,12 @@ See: `.planning/milestones/v1.0-ROADMAP.md` for full phase details.
   4. When locked cards make optimization infeasible, the app surfaces a specific error (salary over cap, collection limit exceeded) before running the solver
   5. When a lock and exclude target the same card or player, the app warns the user and does not proceed
   6. Uploading new CSVs clears all lock and exclude selections from the previous session
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 04-01-PLAN.md — ConstraintSet module and unit test suite (TDD, LOCK-01 through EXCL-02)
+- [ ] 04-02-PLAN.md — Composite key migration and engine ILP constraint injection (LOCK-01, LOCK-02, EXCL-01, EXCL-02)
+- [ ] 04-03-PLAN.md — Flask session integration and reset banner (UI-04)
 
 ### Phase 5: Serialization and Re-Optimize Route
 **Goal**: Users can trigger a fresh optimization using their current lock/exclude selections without re-uploading the roster and projections CSVs
@@ -78,11 +83,11 @@ See: `.planning/milestones/v1.0-ROADMAP.md` for full phase details.
 | 1. Data Foundation | v1.0 | 4/4 | Complete | 2026-03-13 |
 | 2. Optimization Engine | v1.0 | 3/3 | Complete | 2026-03-13 |
 | 3. Web Application and Deployment | v1.0 | 3/3 | Complete | 2026-03-13 |
-| 4. Constraint Foundation | v1.1 | 0/? | Not started | - |
+| 4. Constraint Foundation | v1.1 | 0/3 | Not started | - |
 | 5. Serialization and Re-Optimize Route | v1.1 | 0/? | Not started | - |
 | 6. Lock/Exclude UI | v1.1 | 0/? | Not started | - |
 | 7. Polish | v1.1 | 0/? | Not started | - |
 
 ---
 *Roadmap created: 2026-03-13*
-*Last updated: 2026-03-14 after v1.1 milestone roadmap*
+*Last updated: 2026-03-14 after Phase 4 planned (3 plans)*

@@ -1,0 +1,9 @@
+pyproject.toml
+gbgolf/__init__.py
+gbgolf.egg-info/PKG-INFO
+gbgolf.egg-info/SOURCES.txt
+gbgolf.egg-info/dependency_links.txt
+gbgolf.egg-info/requires.txt
+gbgolf.egg-info/top_level.txt
+gbgolf/data/__init__.py
+gbgolf/data/__main__.py
