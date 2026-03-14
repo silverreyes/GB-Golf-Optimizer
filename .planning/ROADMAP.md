@@ -44,7 +44,7 @@ See: `.planning/milestones/v1.0-ROADMAP.md` for full phase details.
 
 Plans:
 - [x] 04-01-PLAN.md — ConstraintSet module and unit test suite (TDD, LOCK-01 through EXCL-02)
-- [ ] 04-02-PLAN.md — Composite key migration and engine ILP constraint injection (LOCK-01, LOCK-02, EXCL-01, EXCL-02)
+- [x] 04-02-PLAN.md — Composite key migration and engine ILP constraint injection (LOCK-01, LOCK-02, EXCL-01, EXCL-02)
 - [ ] 04-03-PLAN.md — Flask session integration and reset banner (UI-04)
 
 ### Phase 5: Serialization and Re-Optimize Route
@@ -83,11 +83,11 @@ Plans:
 | 1. Data Foundation | v1.0 | 4/4 | Complete | 2026-03-13 |
 | 2. Optimization Engine | v1.0 | 3/3 | Complete | 2026-03-13 |
 | 3. Web Application and Deployment | v1.0 | 3/3 | Complete | 2026-03-13 |
-| 4. Constraint Foundation | v1.1 | 1/3 | In progress | - |
+| 4. Constraint Foundation | v1.1 | 2/3 | In progress | - |
 | 5. Serialization and Re-Optimize Route | v1.1 | 0/? | Not started | - |
 | 6. Lock/Exclude UI | v1.1 | 0/? | Not started | - |
 | 7. Polish | v1.1 | 0/? | Not started | - |
 
 ---
 *Roadmap created: 2026-03-13*
-*Last updated: 2026-03-14 after Phase 4 planned (3 plans)*
+*Last updated: 2026-03-14 after Phase 4 Plan 02 executed (2/3 plans complete)*

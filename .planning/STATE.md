@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Manual Lock/Exclude
 status: in-progress
-stopped_at: Completed 04-01-PLAN.md
-last_updated: "2026-03-14T07:51:00.000Z"
-last_activity: 2026-03-14 — Phase 4 Plan 01 complete (ConstraintSet module)
+stopped_at: Completed 04-02-PLAN.md
+last_updated: "2026-03-14T07:27:46Z"
+last_activity: 2026-03-14 — Phase 4 Plan 02 complete (engine ILP constraints + optimize() ConstraintSet)
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
-  percent: 8
+  completed_plans: 2
+  percent: 18
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-14)
 ## Current Position
 
 Phase: 4 of 7 (Constraint Foundation)
-Plan: 2 of 3 (next: 04-02-PLAN.md — engine ILP constraints)
+Plan: 3 of 3 (next: 04-03-PLAN.md — Flask session integration and reset banner)
 Status: In progress
-Last activity: 2026-03-14 — Plan 04-01 complete: ConstraintSet module and unit tests
+Last activity: 2026-03-14 — Plan 04-02 complete: engine ILP constraints + optimize() ConstraintSet orchestration
 
-Progress: [█░░░░░░░░░] 8% (v1.1, 1/3 Phase 4 plans done)
+Progress: [██░░░░░░░░] 18% (v1.1, 2/3 Phase 4 plans done)
 
 ## Accumulated Context
 
@@ -45,6 +45,10 @@ Recent decisions affecting current work:
 - PreSolveError is a return-object (not exception): callers check if result is None or PreSolveError instance.
 - check_conflicts runs before check_feasibility (documented in module docstring as contract).
 - Golfer locks are ILP-level constraints (engine.py), not pre-solve. check_feasibility only inspects locked_cards.
+- Golfer-lock fires once globally: discard from unsatisfied_golfer_locks after first placement to prevent lineup 2+ infeasibility.
+- Card-lock fires once: discard from active_card_locks after placement (used_card_keys already prevents reuse).
+- Excludes are pre-filters applied to available pool per iteration, not ILP constraints.
+- Composite key (player, salary, multiplier, collection) replaces id() for stable cross-request card identity.
 
 ### Pending Todos
 
@@ -52,10 +56,10 @@ None.
 
 ### Blockers/Concerns
 
-- Phase 4 risk: Lock constraint semantics in the multi-lineup sequential loop. Card-level locks can only fire once (card consumed). Golfer-level locks may become infeasible in lineup 2+ if golfer has only one card. See PITFALLS.md for full checklist.
+None — Phase 4 multi-lineup lock semantics resolved via fires-once tracking.
 
 ## Session Continuity
 
-Last session: 2026-03-14T07:51:00.000Z
-Stopped at: Completed 04-01-PLAN.md
-Resume file: .planning/phases/04-constraint-foundation/04-02-PLAN.md
+Last session: 2026-03-14T07:27:46Z
+Stopped at: Completed 04-02-PLAN.md
+Resume file: .planning/phases/04-constraint-foundation/04-03-PLAN.md
