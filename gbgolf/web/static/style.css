@@ -127,6 +127,10 @@ thead th {
   color: #fff;
 }
 
+#player-pool-section thead th {
+  cursor: pointer;
+}
+
 tfoot td, tfoot th {
   background: #eef3ee;
   font-weight: 700;
