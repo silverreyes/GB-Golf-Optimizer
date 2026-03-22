@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>GB Golf Optimizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Prompt:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
 </head>
 <body>
@@ -14,15 +17,21 @@
 </div>
 
 <header>
-  <h1>GB Golf Optimizer</h1>
+  <div class="hero-bg"></div>
+  <div class="hero-overlay"></div>
+  <div class="hero-content">
+    <img src="https://gameblazers.com/gb-logo.png" alt="GameBlazers" class="gb-logo" onerror="this.style.display='none'" />
+    <h1>GB Golf Optimizer</h1>
+    <p class="hero-subtitle">Fantasy Golf &bull; Lineup Optimizer</p>
+  </div>
 </header>
 
 <main>
 
   <!-- Upload form — collapses to a toggle after results are shown -->
   <details {% if not show_results %}open{% endif %} id="upload-section">
-    <summary>{% if show_results %}Change files{% else %}Upload files{% endif %}</summary>
-    <form method="post" enctype="multipart/form-data" id="upload-form">
+    <summary>{% if show_results %}Change Files{% else %}Upload Files{% endif %}</summary>
+    <form method="post" action="{{ url_for('main.index') }}" enctype="multipart/form-data" id="upload-form">
       <div class="form-row">
         <label for="roster">Roster CSV</label>
         <input type="file" id="roster" name="roster" accept=".csv" required />
@@ -39,86 +48,98 @@
   <p class="error">{{ error }}</p>
   {% endif %}
 
-  <!-- Exclusion report — only shown when there are excluded cards -->
+  <div class="content-layout{% if validation and validation.excluded %} has-sidebar{% endif %}">
+
+  <!-- Left sidebar: unmatched players -->
   {% if validation and validation.excluded %}
-  <section id="exclusion-report">
-    <h2>Unmatched Players</h2>
-    <p>The following cards were excluded from lineup generation:</p>
-    <ul>
-      {% for excl in validation.excluded %}
-      <li>{{ excl.player }} &mdash; {{ excl.reason }}</li>
-      {% endfor %}
-    </ul>
-  </section>
+  <aside class="sidebar">
+    <section id="exclusion-report">
+      <h2>Unmatched Players</h2>
+      <ul>
+        {% for excl in validation.excluded %}
+        <li>{{ excl.player }} &mdash; {{ excl.reason }}</li>
+        {% endfor %}
+      </ul>
+    </section>
+  </aside>
   {% endif %}
+
+  <!-- Main content -->
+  <div class="main-content">
 
   {% if show_results and card_pool_json %}
   <form method="post" action="{{ url_for('main.reoptimize') }}" id="reoptimize-form">
     <input type="hidden" name="card_pool" value="{{ card_pool_json | e }}" />
 
     <details id="player-pool-section" open>
-      <summary>Lock / Exclude Players</summary>
-      <button type="button" id="clear-all-btn" onclick="clearAllCheckboxes()">Clear All</button>
-      <table>
-        <thead>
-          <tr>
-            <th onclick="sortTable(0)">Lock</th>
-            <th onclick="sortTable(1)">Lock Golfer</th>
-            <th onclick="sortTable(2)">Exclude</th>
-            <th onclick="sortTable(3)">Player</th>
-            <th onclick="sortTable(4)">Collection</th>
-            <th onclick="sortTable(5)">Salary</th>
-            <th onclick="sortTable(6)">Multiplier</th>
-            <th onclick="sortTable(7)">Proj Score</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% if card_pool %}
-          {% set ns = namespace(prev_player="") %}
-          {% for card in card_pool %}
-          <tr>
-            <td data-sort="{{ 1 if locked_card_keys and (card.player, card.salary, card.multiplier, card.collection) in locked_card_keys else 0 }}">
-              <input type="checkbox"
-                     name="lock_card"
-                     value="{{ card.player }}|{{ card.salary }}|{{ card.multiplier }}|{{ card.collection }}"
-                     class="lock-cb"
-                     {% if locked_card_keys and (card.player, card.salary, card.multiplier, card.collection) in locked_card_keys %}checked{% endif %}
-              />
-            </td>
-            <td data-sort="{{ 1 if locked_golfer_set and card.player in locked_golfer_set else 0 }}">
-              {% if card.player != ns.prev_player %}
-              {% set ns.prev_player = card.player %}
-              <input type="checkbox"
-                     name="lock_golfer"
-                     value="{{ card.player }}"
-                     class="lock-golfer-cb"
-                     {% if locked_golfer_set and card.player in locked_golfer_set %}checked{% endif %}
-              />
-              {% else %}
-              <span class="lock-golfer-empty"></span>
-              {% endif %}
-            </td>
-            <td data-sort="{{ 1 if excluded_card_keys and (card.player, card.salary, card.multiplier, card.collection) in excluded_card_keys else 0 }}">
-              <input type="checkbox"
-                     name="exclude_card"
-                     value="{{ card.player }}|{{ card.salary }}|{{ card.multiplier }}|{{ card.collection }}"
-                     class="exclude-cb"
-                     {% if excluded_card_keys and (card.player, card.salary, card.multiplier, card.collection) in excluded_card_keys %}checked{% endif %}
-              />
-            </td>
-            <td data-sort="{{ card.player }}">{{ card.player }}</td>
-            <td data-sort="{{ card.collection }}">{{ card.collection }}</td>
-            <td data-sort="{{ card.salary }}">${{ card.salary }}</td>
-            <td data-sort="{{ card.multiplier }}">{{ card.multiplier }}</td>
-            <td data-sort="{{ card.projected_score or 0 }}">{{ "%.2f"|format(card.projected_score or 0.0) }}</td>
-          </tr>
-          {% endfor %}
-          {% endif %}
-        </tbody>
-      </table>
+      <summary>Lock / Exclude Players <button type="button" id="clear-all-btn" onclick="clearAllCheckboxes(); event.stopPropagation();">Clear All</button></summary>
+      <div class="pool-inner">
+        <table>
+          <thead>
+            <tr>
+              <th onclick="sortTable(0)">Lock Card</th>
+              <th onclick="sortTable(1)">Lock Golfer</th>
+              <th onclick="sortTable(2)">Exclude Golfer</th>
+              <th onclick="sortTable(3)">Player</th>
+              <th onclick="sortTable(4)">Collection</th>
+              <th onclick="sortTable(5)">Salary</th>
+              <th onclick="sortTable(6)">Multiplier</th>
+              <th onclick="sortTable(7)">Proj Score</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if card_pool %}
+            {% set ns = namespace(prev_player="", prev_player_excl="") %}
+            {% for card in card_pool %}
+            <tr data-player="{{ card.player }}">
+              <td data-sort="{{ 1 if locked_card_keys and (card.player, card.salary, card.multiplier, card.collection) in locked_card_keys else 0 }}">
+                <input type="checkbox"
+                       name="lock_card"
+                       value="{{ card.player }}|{{ card.salary }}|{{ card.multiplier }}|{{ card.collection }}"
+                       class="lock-cb"
+                       {% if locked_card_keys and (card.player, card.salary, card.multiplier, card.collection) in locked_card_keys %}checked{% endif %}
+                />
+              </td>
+              <td data-sort="{{ 1 if locked_golfer_set and card.player in locked_golfer_set else 0 }}">
+                {% if card.player != ns.prev_player %}
+                {% set ns.prev_player = card.player %}
+                <input type="checkbox"
+                       name="lock_golfer"
+                       value="{{ card.player }}"
+                       class="lock-golfer-cb"
+                       {% if locked_golfer_set and card.player in locked_golfer_set %}checked{% endif %}
+                />
+                {% else %}
+                <span class="lock-golfer-empty"></span>
+                {% endif %}
+              </td>
+              <td data-sort="{{ 1 if excluded_player_set and card.player in excluded_player_set else 0 }}">
+                {% if card.player != ns.prev_player_excl %}
+                {% set ns.prev_player_excl = card.player %}
+                <input type="checkbox"
+                       name="exclude_golfer"
+                       value="{{ card.player }}"
+                       class="exclude-golfer-cb"
+                       {% if excluded_player_set and card.player in excluded_player_set %}checked{% endif %}
+                />
+                {% else %}
+                <span class="exclude-golfer-empty"></span>
+                {% endif %}
+              </td>
+              <td data-sort="{{ card.player }}">{{ card.player }}</td>
+              <td data-sort="{{ card.collection }}">{{ card.collection }}</td>
+              <td data-sort="{{ card.salary }}">${{ card.salary }}</td>
+              <td data-sort="{{ card.multiplier }}">{{ card.multiplier }}</td>
+              <td data-sort="{{ card.projected_score or 0 }}">{{ "%.2f"|format(card.projected_score or 0.0) }}</td>
+            </tr>
+            {% endfor %}
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
     </details>
 
-    <div id="constraint-count" style="display:none; margin-bottom:0.5rem; font-weight:bold;"></div>
+    <div id="constraint-count" style="display:none;"></div>
     <button type="submit">Re-Optimize</button>
   </form>
   {% endif %}
@@ -126,9 +147,7 @@
   <!-- Lineup results — rendered only after a successful POST -->
   {% if show_results and result %}
   {% if lock_reset %}
-  <div class="reset-banner" style="background:#fef3c7;border:1px solid #d97706;color:#92400e;padding:0.75rem 1rem;margin-bottom:1rem;border-radius:4px;">
-    Locks and excludes reset for new upload
-  </div>
+  <div class="reset-banner">Locks and excludes reset for new upload</div>
   {% endif %}
   {% set contest_order = ["The Tips", "The Intermediate Tee"] %}
   {% for contest_name in contest_order %}
@@ -138,64 +157,70 @@
     {% set lineups = result.lineups.get(contest_name, []) %}
     {% set notices = result.infeasibility_notices %}
 
-    {% if lineups %}
-    {% for lineup in lineups %}
-    <h3>
-      Lineup {{ loop.index }}
-      &mdash; Salary: ${{ lineup.total_salary }}
-      | Proj: {{ "%.2f"|format(lineup.total_projected_score) }}
-    </h3>
-    <table>
-      <thead>
-        <tr>
-          <th>Lock</th>
-          <th>Player</th>
-          <th>Collection</th>
-          <th>Salary</th>
-          <th>Multiplier</th>
-          <th>Proj Score</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for card in lineup.cards %}
-        <tr>
-          <td>{% if (locked_card_keys and (card.player, card.salary, card.multiplier, card.collection) in locked_card_keys) or (locked_golfer_set and card.player in locked_golfer_set) %}🔒{% endif %}</td>
-          <td>{{ card.player }}</td>
-          <td>{{ card.collection }}</td>
-          <td>${{ card.salary }}</td>
-          <td>{{ card.multiplier }}</td>
-          <td>{{ "%.2f"|format(card.projected_score or 0.0) }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-      <tfoot>
-        <tr>
-          <td colspan="3"><strong>Totals</strong></td>
-          <td><strong>${{ lineup.total_salary }}</strong></td>
-          <td></td>
-          <td><strong>{{ "%.2f"|format(lineup.total_projected_score) }}</strong></td>
-        </tr>
-      </tfoot>
-    </table>
-    {% endfor %}
-
-    {% else %}
-    <!-- No lineups for this contest — check infeasibility notices -->
-    {% set ns = namespace(shown=false) %}
+    <!-- Notices shown whenever present, not only when lineups are absent -->
+    {% set ns = namespace(has_notices=false) %}
     {% for notice in notices %}
     {% if contest_name in notice %}
     <p class="infeasible">{{ notice }}</p>
-    {% set ns.shown = true %}
+    {% set ns.has_notices = true %}
     {% endif %}
     {% endfor %}
-    {% if not ns.shown %}
+
+    {% if lineups %}
+    {% for lineup in lineups %}
+    <div class="lineup-block">
+      <div class="lineup-header">
+        Lineup {{ loop.index }}
+        &nbsp;&mdash;&nbsp;
+        Salary: <span>${{ lineup.total_salary }}</span>
+        &nbsp;&bull;&nbsp;
+        Proj: <span>{{ "%.2f"|format(lineup.total_projected_score) }}</span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Lock</th>
+            <th>Player</th>
+            <th>Collection</th>
+            <th>Salary</th>
+            <th>Multiplier</th>
+            <th>Proj Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for card in lineup.cards %}
+          <tr>
+            <td>{% if (locked_card_keys and (card.player, card.salary, card.multiplier, card.collection) in locked_card_keys) or (locked_golfer_set and card.player in locked_golfer_set) %}🔒{% endif %}</td>
+            <td>{{ card.player }}</td>
+            <td>{{ card.collection }}</td>
+            <td>${{ card.salary }}</td>
+            <td>{{ card.multiplier }}</td>
+            <td>{{ "%.2f"|format(card.projected_score or 0.0) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3"><strong>Totals</strong></td>
+            <td><strong>${{ lineup.total_salary }}</strong></td>
+            <td></td>
+            <td><strong>{{ "%.2f"|format(lineup.total_projected_score) }}</strong></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    {% endfor %}
+
+    {% elif not ns.has_notices %}
     <p class="infeasible">No lineup could be built for this contest.</p>
-    {% endif %}
     {% endif %}
 
   </section>
   {% endfor %}
   {% endif %}
+
+  </div><!-- /.main-content -->
+  </div><!-- /.content-layout -->
 
 </main>
 
@@ -209,31 +234,69 @@
       document.getElementById("loading-overlay").style.display = "flex";
     });
   }
-  document.querySelectorAll(".lock-cb").forEach(function(lockCb) {
-    lockCb.addEventListener("change", function() {
-      var row = lockCb.closest("tr");
-      var excludeCb = row.querySelector(".exclude-cb");
-      if (excludeCb) excludeCb.disabled = lockCb.checked;
+  // --- Mutual exclusion helpers ---
+  function findExcludeGolferCb(playerName) {
+    var found = null;
+    document.querySelectorAll(".exclude-golfer-cb").forEach(function(cb) {
+      if (cb.value === playerName) found = cb;
+    });
+    return found;
+  }
+  function findLockGolferCb(playerName) {
+    var found = null;
+    document.querySelectorAll(".lock-golfer-cb").forEach(function(cb) {
+      if (cb.value === playerName) found = cb;
+    });
+    return found;
+  }
+  function findLockCardCbsForPlayer(playerName) {
+    var result = [];
+    document.querySelectorAll("tr[data-player]").forEach(function(row) {
+      if (row.dataset.player === playerName) {
+        var cb = row.querySelector(".lock-cb");
+        if (cb) result.push(cb);
+      }
+    });
+    return result;
+  }
+  function isPlayerLocked(playerName) {
+    var lgCb = findLockGolferCb(playerName);
+    if (lgCb && lgCb.checked) return true;
+    return findLockCardCbsForPlayer(playerName).some(function(cb) { return cb.checked; });
+  }
+
+  // Exclude golfer → disable all locks for that player
+  document.querySelectorAll(".exclude-golfer-cb").forEach(function(cb) {
+    cb.addEventListener("change", function() {
+      var player = cb.value;
+      var lgCb = findLockGolferCb(player);
+      if (lgCb) lgCb.disabled = cb.checked;
+      findLockCardCbsForPlayer(player).forEach(function(lc) { lc.disabled = cb.checked; });
       updateConstraintCount();
     });
   });
-  document.querySelectorAll(".lock-golfer-cb").forEach(function(lockGolferCb) {
-    lockGolferCb.addEventListener("change", function() {
+  // Lock golfer → disable exclude golfer for that player
+  document.querySelectorAll(".lock-golfer-cb").forEach(function(cb) {
+    cb.addEventListener("change", function() {
+      var egCb = findExcludeGolferCb(cb.value);
+      if (egCb) egCb.disabled = cb.checked;
       updateConstraintCount();
     });
   });
-  document.querySelectorAll(".exclude-cb").forEach(function(excludeCb) {
-    excludeCb.addEventListener("change", function() {
-      var row = excludeCb.closest("tr");
-      var lockCb = row.querySelector(".lock-cb");
-      if (lockCb) lockCb.disabled = excludeCb.checked;
+  // Lock card → disable exclude golfer for that player (re-enable only when no locks remain)
+  document.querySelectorAll(".lock-cb").forEach(function(cb) {
+    cb.addEventListener("change", function() {
+      var row = cb.closest("tr");
+      if (!row || !row.dataset.player) return;
+      var egCb = findExcludeGolferCb(row.dataset.player);
+      if (egCb) egCb.disabled = isPlayerLocked(row.dataset.player);
       updateConstraintCount();
     });
   });
   var sortState = { col: 3, asc: true };  // default: Player A-Z
 
   function sortTable(colIndex) {
-    var asc = (sortState.col === colIndex) ? !sortState.asc : false;  // first click = descending
+    var asc = (sortState.col === colIndex) ? !sortState.asc : false;
     sortState = { col: colIndex, asc: asc };
     var tbody = document.querySelector("#player-pool-section table tbody");
     if (!tbody) return;
@@ -265,31 +328,37 @@
     var el = document.getElementById("constraint-count");
     if (!el) return;
     var locks = document.querySelectorAll(".lock-cb:checked, .lock-golfer-cb:checked").length;
-    var excludes = document.querySelectorAll(".exclude-cb:checked").length;
+    var excludes = document.querySelectorAll(".exclude-golfer-cb:checked").length;
     if (locks === 0 && excludes === 0) {
       el.style.display = "none";
     } else {
-      el.textContent = "Locks: " + locks + " | Excludes: " + excludes;
+      el.textContent = "Locks: " + locks + " \u2022 Excludes: " + excludes;
       el.style.display = "";
     }
   }
+
   function clearAllCheckboxes() {
-    document.querySelectorAll(".lock-cb, .lock-golfer-cb, .exclude-cb").forEach(function(cb) {
+    document.querySelectorAll(".lock-cb, .lock-golfer-cb, .exclude-golfer-cb").forEach(function(cb) {
       cb.checked = false;
       cb.disabled = false;
     });
     updateConstraintCount();
   }
-  // Initialize disabled state for pre-checked checkboxes on page load
-  document.querySelectorAll(".lock-cb:checked").forEach(function(lockCb) {
-    var row = lockCb.closest("tr");
-    var excludeCb = row && row.querySelector(".exclude-cb");
-    if (excludeCb) excludeCb.disabled = true;
+
+  // Initialize disabled states for pre-checked boxes on page load
+  document.querySelectorAll(".exclude-golfer-cb:checked").forEach(function(cb) {
+    var player = cb.value;
+    var lgCb = findLockGolferCb(player);
+    if (lgCb) lgCb.disabled = true;
+    findLockCardCbsForPlayer(player).forEach(function(lc) { lc.disabled = true; });
   });
-  document.querySelectorAll(".exclude-cb:checked").forEach(function(excludeCb) {
-    var row = excludeCb.closest("tr");
-    var lockCb = row && row.querySelector(".lock-cb");
-    if (lockCb) lockCb.disabled = true;
+  document.querySelectorAll(".lock-golfer-cb:checked, .lock-cb:checked").forEach(function(cb) {
+    var player = cb.classList.contains("lock-golfer-cb")
+      ? cb.value
+      : (cb.closest("tr") ? cb.closest("tr").dataset.player : null);
+    if (!player) return;
+    var egCb = findExcludeGolferCb(player);
+    if (egCb) egCb.disabled = true;
   });
   updateConstraintCount();
   updateSortIndicators(3, true);
