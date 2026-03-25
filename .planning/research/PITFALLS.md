@@ -1,143 +1,308 @@
 # Pitfalls Research
 
-**Domain:** Adding manual lock/exclude to an existing ILP-based DFS lineup optimizer (GameBlazers-specific)
-**Researched:** 2026-03-14
-**Confidence:** HIGH — findings grounded in existing codebase analysis, ILP constraint theory, and DFS optimizer community patterns verified via web search
+**Domain:** Adding DataGolf API integration, PostgreSQL, and cron scheduling to an existing Flask DFS golf optimizer
+**Researched:** 2026-03-25
+**Confidence:** HIGH for cron/DB/API key pitfalls (well-documented failure modes); MEDIUM for DataGolf-specific behavior (API response format partially verified, off-week behavior unverified)
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Locked Cards Making the ILP Infeasible with No Useful Error
+### Pitfall 1: Cron Job Cannot See the DataGolf API Key
 
 **What goes wrong:**
-The user locks 4 expensive cards (e.g., total locked salary = $44,000) into a 6-card Tips lineup with salary cap $64,000. The ILP must select 2 more cards with salary between $30,000 − $44,000 = −$14,000 floor (already violated) and $64,000 − $44,000 = $20,000 ceiling from remaining cards. If no 2-card combination meets both salary bounds and collection limits simultaneously, the solve returns `LpStatusInfeasible`. The current engine returns `None` and logs a generic notice like "lineup 1 of 3 could not be built (infeasible)". The user sees a blank lineup with no guidance.
+The cron fetcher script runs and immediately fails with a `KeyError` or `None` value when reading `os.environ["DATAGOLF_API_KEY"]`. The API key is set in `~/.bashrc` or in the systemd service unit for Gunicorn, but cron jobs do not inherit either of those environments. The script silently fails (cron swallows output by default), so no projections are fetched. The user discovers the problem days later when they notice stale data.
 
 **Why it happens:**
-The existing `_solve_one_lineup` in `engine.py` returns `None` for any non-optimal status without distinguishing user error (over-locked) from genuine scarcity. When locks are added as equality constraints (`x[i] == 1`), the solver will find infeasibility but cannot tell the user which constraint is the culprit without additional diagnostics. Adding lock constraints is technically trivial — `prob += x[i] == 1` — but infeasibility diagnosis is skipped in the current implementation.
+Cron spawns a minimal shell with almost no environment variables. It does not source `~/.bashrc`, `~/.profile`, or `/etc/profile`. The Gunicorn systemd service has its own `Environment=` directives, but those apply only to the Gunicorn process, not to cron. Developers test the fetcher script manually from their interactive shell (where the env var is set) and assume it will work the same under cron.
 
 **How to avoid:**
-- After a `None` result from `_solve_one_lineup`, run a fast pre-solve check specific to lock constraints:
-  1. Compute locked card count — if it equals or exceeds `roster_size`, reject immediately with "X locked cards equals/exceeds the required Y roster slots."
-  2. Compute locked salary sum — if it already exceeds `salary_max`, reject with "Locked cards total $X, which exceeds the salary cap of $Y."
-  3. Compute minimum remaining salary needed — if locked salary + min possible salary for remaining slots > `salary_max`, reject with a specific message.
-  4. Check collection limits — if locked cards already exceed a collection limit (e.g., 4 Weekly Collection cards locked but limit is 3), reject with "X Weekly Collection cards locked but limit is Y."
-- Return these pre-solve diagnostics as structured data, not just a string, so the UI can display them per-lineup with actionable guidance.
-- Run these checks in Python before calling PuLP (they are O(n) and take microseconds) so the error is immediate.
+Store the API key in a dedicated env file and source it in the cron command:
+
+```crontab
+# /etc/cron.d/datagolf-fetch or user crontab
+0 7 * * 2,3 . /opt/GBGolfOptimizer/.env && /opt/GBGolfOptimizer/venv/bin/python /opt/GBGolfOptimizer/fetch_projections.py >> /var/log/datagolf-fetch.log 2>&1
+```
+
+The `.env` file format:
+
+```bash
+export DATAGOLF_API_KEY="your-key-here"
+```
+
+Alternatively, define the variable directly in the crontab:
+
+```crontab
+DATAGOLF_API_KEY=your-key-here
+0 7 * * 2,3 /opt/GBGolfOptimizer/venv/bin/python /opt/GBGolfOptimizer/fetch_projections.py >> /var/log/datagolf-fetch.log 2>&1
+```
+
+The `.env` file approach is better because the same file can be sourced by the systemd service via `EnvironmentFile=`, keeping the key in one place.
 
 **Warning signs:**
-- User locks cards and all lineups disappear simultaneously
-- Infeasibility notice appears but the user cannot identify what to change
-- User reports "the optimizer broke when I locked my best cards"
+- Projections table is empty or always stale
+- `journalctl` and syslog show the cron job fired but there is no application log output
+- Running the fetcher manually from SSH works fine
 
 **Phase to address:**
-Phase 1 of the lock/exclude milestone (constraint layer). The pre-solve diagnostics must be part of the same implementation as the lock constraints themselves — never shipped separately.
+Phase 1 (DataGolf fetcher + DB setup). The `.env` file and cron entry must be part of the same deployment step. Never deploy the fetcher script without verifying cron can see the API key.
 
 ---
 
-### Pitfall 2: Lock Constraint Leaking Across the Multi-Lineup Sequential Loop
+### Pitfall 2: Cron Output Disappears Into the Void (Silent Failures)
 
 **What goes wrong:**
-The `optimize()` function in `__init__.py` loops over `range(config.max_entries)` and calls `_solve_one_lineup(available, config)` for each lineup. Lock constraints are meant to apply to every lineup (e.g., "always include Scottie Scheffler"). However, once lineup 1 is built and Scheffler's card is added to `used_card_ids`, the card is excluded from `available` for lineup 2. Lineup 2's lock constraint (`x[scheffler_card] == 1`) then references a card that is not in the pool — the constraint silently vanishes or, depending on implementation, causes a KeyError.
+The cron job runs the fetcher script, but stdout and stderr are not redirected. Cron attempts to email the output to the local user, but no MTA (mail transfer agent) is configured on the VPS. All output is discarded. When the DataGolf API returns an error, the script's error message is lost. The developer has no idea the fetcher has been failing for weeks.
 
 **Why it happens:**
-The existing engine builds a fresh ILP per lineup with only `available` cards. If a locked card is no longer in `available`, there is no variable for it to constrain. The developer assumes "lock = force into every lineup" but the card-locking rule (each card used only once) makes this physically impossible.
+By default, cron captures stdout/stderr and tries to send it via local mail. Most VPS setups (including Hostinger KVM) do not have a working MTA configured. Without explicit output redirection in the crontab line, every `print()` and traceback is silently dropped.
 
 **How to avoid:**
-- Distinguish two semantically different lock types before writing a line of ILP code:
-  - **Card lock**: Force *this specific card* into the lineup. Applies to exactly one lineup (the card is then consumed). Mutually exclusive with appearing in lineup 2.
-  - **Golfer lock**: Force *this golfer* (by name) into the lineup — any card for that golfer will do. Can apply to multiple lineups because different cards for the same golfer are separate objects.
-- For card locks: apply only to lineup 1 (or whichever lineup the card is available for). Show the user which lineup the card will appear in.
-- For golfer locks: translate to "at least one card for player X must be selected" — `prob += lpSum(x[i] for i in indices_for_player) >= 1`. This survives card exhaustion only if the golfer has multiple cards; if only one card remains and it is consumed in lineup 1, lineup 2 will be infeasible unless the user understands this.
-- Surface this distinction prominently in the UI label ("Lock this card" vs. "Lock this golfer").
+Always redirect both stdout and stderr to a log file in the crontab entry:
+
+```crontab
+0 7 * * 2,3 . /opt/GBGolfOptimizer/.env && /opt/GBGolfOptimizer/venv/bin/python /opt/GBGolfOptimizer/fetch_projections.py >> /var/log/datagolf-fetch.log 2>&1
+```
+
+Key details:
+- Use `>>` (append), not `>` (overwrite), so logs accumulate across runs
+- `2>&1` must come after the file redirect
+- Add timestamps to log output inside the Python script (use `logging` module with a formatter, not bare `print()`)
+- Set up log rotation with `logrotate` to prevent unbounded growth:
+
+```
+# /etc/logrotate.d/datagolf-fetch
+/var/log/datagolf-fetch.log {
+    weekly
+    rotate 8
+    compress
+    missingok
+    notifempty
+}
+```
 
 **Warning signs:**
-- Lock on a golfer causes lineup 1 to work but lineup 2 becomes infeasible when golfer has only one card
-- Card lock silently disappears in lineup 2 because card is already used
-- User thinks golfer appears in all lineups but only sees them in one
+- No log file exists at the expected path
+- Log file exists but has not been updated in days/weeks
+- `grep CRON /var/log/syslog` shows the cron fired but there is no application output
 
 **Phase to address:**
-Phase 1 of the lock/exclude milestone (before any UI work). The card vs. golfer distinction is architectural for the constraint layer.
+Phase 1 (cron setup). Logging and output redirection are part of the cron entry, not an afterthought.
 
 ---
 
-### Pitfall 3: Session State Carrying Stale Locks After CSV Re-Upload
+### Pitfall 3: PostgreSQL Connection Shared Across Gunicorn Forked Workers
 
 **What goes wrong:**
-The user uploads CSVs, locks Scottie Scheffler, sees the lineup, then uploads new CSVs with a different roster. The lock state (`locked_card_ids = {id(scheffler_card)}`) still references the Python `id()` of the old card object. New CSV parsing creates entirely new `Card` objects with different `id()` values. The lock appears to apply (the set is non-empty) but never matches any card in the new pool — silently no-ops. Alternatively: the lock list is stored as player names in a server-side dict that persists across requests. New session, old locks remain. The user optimizes thinking Scheffler is locked but he is not.
+The Flask app creates a SQLAlchemy engine (or raw psycopg2 connection pool) at import time or during `create_app()`. Gunicorn then forks 2 worker processes. Both workers inherit the same file descriptors (TCP connections) to PostgreSQL. When both workers use these shared connections simultaneously, they corrupt each other's query streams. Symptoms: `psycopg2.OperationalError: SSL error: decryption failed or bad record mac`, or silently wrong query results, or intermittent connection resets.
 
 **Why it happens:**
-The current `optimize()` uses `id(c)` for card deduplication across lineups — a Python object identity approach that is session-local and non-persistent. This is correct for the current use case. But if lock state is stored the same way (by object identity), it breaks when objects are recreated. Meanwhile, Flask's default session is cookie-based and persists across requests in the same browser session. If lock state is stored in Flask session, uploading new CSVs does not automatically clear it unless explicitly coded.
+Gunicorn uses a pre-fork model: it imports the WSGI app (`wsgi:app`) in the master process, then forks workers. If the engine/pool is created during import, the pooled connections exist before the fork and are duplicated into each child. PostgreSQL TCP connections are not fork-safe.
 
 **How to avoid:**
-- Never store lock state by Python `id()`. Store locks by a stable card key: composite of `(player_name, salary, multiplier, collection)` — this matches the same logical card across upload cycles.
-- Implement an explicit "reset locks on new upload" rule: whenever `validate_pipeline` succeeds for a new CSV pair, clear all lock/exclude state. This is the safest and simplest guarantee.
-- If using Flask session for lock state, add a "session fingerprint" — a hash of the uploaded CSV filenames + upload timestamp. If the fingerprint changes, clear locks. If the fingerprint matches, restore locks.
-- Document the reset rule in the UI: a visible "Locks reset when new CSVs are uploaded" notice near the upload button.
+Use `pool_pre_ping=True` and ensure the engine is created inside the Flask app factory (which the current codebase already does via `create_app()`). With Gunicorn's default pre-fork behavior:
+
+1. If using `--preload` (which pre-imports the app), add a Gunicorn `post_fork` hook that calls `engine.dispose()` in each worker:
+
+```python
+# gunicorn.conf.py
+def post_fork(server, worker):
+    from gbgolf.web import db_engine
+    if db_engine:
+        db_engine.dispose()
+```
+
+2. Better: do NOT use `--preload` (the current `gbgolf.service` does not use it). Each worker will call `create_app()` independently and get its own engine/pool. This is the simplest correct approach for 2 workers.
+
+3. Set conservative pool sizes. With 2 Gunicorn workers and `pool_size=5` (default), you could open up to 10 connections to PostgreSQL. For a single-user app, `pool_size=2, max_overflow=3` per worker is more than sufficient.
+
+4. Always enable `pool_pre_ping=True`:
+
+```python
+engine = create_engine(
+    DATABASE_URL,
+    pool_size=2,
+    max_overflow=3,
+    pool_pre_ping=True,
+    pool_recycle=1800,  # recycle connections every 30 minutes
+)
+```
 
 **Warning signs:**
-- User reports "I locked a player but they didn't appear in the lineup after I re-uploaded"
-- Lock indicator shows a player as locked who no longer exists in the current roster
-- POST to `/optimize` with locks produces results that ignore the locks with no error
+- Intermittent `OperationalError` or `InterfaceError` in Gunicorn worker logs
+- `pg_stat_activity` shows more connections than expected (2 workers x pool_size)
+- Errors appear only under concurrent requests, never in single-request testing
 
 **Phase to address:**
-Phase 1 of the lock/exclude milestone (state management design). The stable key scheme must be decided before any implementation — changing it later requires migrating all stored state.
+Phase 1 (PostgreSQL setup). Engine configuration must be correct from the first deployment. Testing with `gunicorn --workers 2` locally before deploying catches this.
 
 ---
 
-### Pitfall 4: Exclude on a Card vs. Exclude on a Golfer — Ambiguous Semantics Causing Wrong Results
+### Pitfall 4: Player Name Mismatch Between DataGolf and GameBlazers Roster
 
 **What goes wrong:**
-The user has two Scottie Scheffler cards (1.0x at $12,000 and 1.5x at $10,500). They click "exclude" on the $12,000 card intending to force the optimizer to use the cheaper 1.5x card instead. But the UI labels both a card-level action ("exclude this card") and a player-level action ("exclude Scottie Scheffler") identically. Implementation excludes the golfer entirely — neither card appears. User loses their best card from consideration.
+DataGolf returns `player_name: "Ludvig Aberg"` (ASCII-ified). GameBlazers roster CSV has `Player: "Ludvig Aberg"` or possibly `"Ludvig Åberg"` (with diacritical). The existing `normalize_name()` in `matching.py` handles NFKD decomposition to strip combining marks, but the normalized forms must match across three sources: DataGolf API, GameBlazers CSV, and any manually uploaded projections CSV.
 
-The reverse also occurs: user intends to exclude Scheffler entirely (he is injured) but the UI only excludes the specific card they clicked. The other card is still selected by the optimizer.
+Additional name format risks:
+- Suffixes: `"Davis Love III"` vs. `"Davis Love"` vs. `"Love III, Davis"`
+- `"Si Woo Kim"` vs. `"S.W. Kim"` vs. `"Kim Si Woo"`
+- `"Byeong Hun An"` vs. `"Ben An"`
+- `"Min Woo Lee"` vs. `"Minwoo Lee"`
+- Hyphens: `"Nicolai Hojgaard"` (DataGolf) vs. `"Nicolai Hoejgaard"` (some sources) vs. `"Nicolai Hojgaard"` (GameBlazers)
+- Jr./Sr.: `"Harold Varner III"` with or without period
 
 **Why it happens:**
-Card-level and player-level lock/exclude feel identical to the user — one click, one intent. But the ILP constraint difference is significant:
-- Card exclude: remove card from `valid_cards` list before calling `_solve_one_lineup`
-- Player exclude: add constraint `sum(x[i] for i in player_indices) == 0` (or equivalently, filter all cards for that player)
-
-Developers typically implement only one level and assume it covers both use cases, or implement both but make the distinction unclear in the UI.
+Each data source has its own canonical name list. DataGolf uses DraftKings player names (since the endpoint is DraftKings-specific). GameBlazers has its own player database. There is no universal golf player ID shared across these platforms. The existing `normalize_name()` handles accents but not suffix variations or name order differences.
 
 **How to avoid:**
-- Design the UI with two explicitly labeled actions per card row:
-  - "Exclude card" — removes only this card (the 1.5x card remains eligible)
-  - "Exclude golfer" — removes all cards for this player name
-- If space is limited, default to card-level exclude and provide a secondary "exclude all [player] cards" affordance
-- In the data model, store exclusions in two separate sets: `excluded_card_keys: set[tuple]` and `excluded_players: set[str]`
-- At optimization time, filter `valid_cards` by both sets before passing to the optimizer — do not inject player-level exclusions as ILP constraints, just pre-filter the card list. This is simpler and avoids any risk of the constraint interacting poorly with lock constraints.
+1. Store the `dg_id` (DataGolf's numeric player identifier) alongside the player name when fetching projections. This is stable across weeks even if name formatting changes.
+
+2. Build a name alias table for the 5-10 players whose names consistently differ between DataGolf and GameBlazers:
+
+```python
+# aliases.py — maps DataGolf name -> GameBlazers name (both normalized)
+DATAGOLF_TO_GAMEBLAZERS = {
+    "si woo kim": "si woo kim",  # verify actual formats
+    "byeong hun an": "ben an",   # if GameBlazers uses nickname
+    # Add as mismatches are discovered
+}
+```
+
+3. Log every unmatched projection (the app already does this via `projection_warnings`). Review unmatched lists after each week's fetch to catch new mismatches.
+
+4. Do NOT attempt fuzzy matching (Levenshtein, etc.) automatically. Golf has many players with similar names (e.g., "Tom Kim" vs. "Si Woo Kim"). Fuzzy matching will produce false positives. Use exact normalized match + explicit alias table.
 
 **Warning signs:**
-- User excludes a card but the golfer still appears (player-level was intended)
-- User excludes a card and an unexpected card for the same player is also removed
-- UI shows "excluded" state but optimizer still selects the player
+- `projection_warnings` list grows unexpectedly after switching to DataGolf source
+- A well-known player shows `projected_score: None` despite being in the tournament field
+- Unmatched player count is consistently higher with DataGolf than with manually uploaded CSV
 
 **Phase to address:**
-Phase 1 of the lock/exclude milestone (UI design and data model). This distinction must be in the design spec before any frontend code is written.
+Phase 2 (projection matching integration). The alias table should be populated by running DataGolf projections against a real GameBlazers roster export and recording every mismatch in the first week of testing.
 
 ---
 
-### Pitfall 5: Locking Both a Card and Excluding Its Player — Conflicting Constraints
+### Pitfall 5: "Current Week" Boundary Logic Errors
 
 **What goes wrong:**
-The user locks a Scheffler card (card-level lock) and also excludes Scheffler as a player (player-level exclude) — or the UI allows this state through inconsistent interaction design. The ILP receives `x[scheffler_card] == 1` (lock) and `sum(x[scheffler_cards]) == 0` (exclude), which is immediately infeasible (`1 == 0` for the same variable). CBC returns infeasible with no useful message. The user cannot explain why their lineup failed.
+The cron fetches projections on Tuesday morning. The app labels them "current week." But the PGA Tour schedule has complications:
+- **Monday finishes:** Some tournaments extend to Monday due to weather. Tuesday's fetch might contain projections for a tournament whose previous edition just ended on Monday.
+- **Alternate events:** When two events run simultaneously (main tour + opposite field), the `tour=pga` parameter returns the main event, but the user might have cards for players in the opposite-field event (`tour=opp`).
+- **Off-weeks:** During PGA Tour breaks (e.g., after The Masters, during the Olympics), the API may return projections for the next upcoming event or return no data at all. The app labels stale data as "current" because no new fetch replaced it.
+- **Thursday-Sunday vs. Wednesday-Saturday events:** Some tournaments start on different days, shifting when "current week" projections become relevant.
 
 **Why it happens:**
-Lock and exclude are typically separate UI interactions. Without mutual exclusion logic in the frontend and validation in the backend, contradictory state is possible. This is especially likely if the lock and exclude states are stored separately and validated independently rather than as a unified constraint set.
+The concept of "current tournament week" is not a clean calendar boundary. Developers assume "this week's Tuesday = this week's tournament" but PGA Tour scheduling is irregular. DataGolf updates projections when tee times are released (typically Tuesday for Thursday-start events), but the timing varies.
 
 **How to avoid:**
-- When a card is locked, disable the "exclude golfer" button for that player name
-- When a golfer is excluded, disable the lock button for all their cards
-- In the backend validation layer (before calling the optimizer), check: does any locked card belong to an excluded player? If so, return a validation error: "Cannot lock [card] and exclude [player] simultaneously" before the solve is even attempted
-- Store all constraint state in a single `ConstraintSet` dataclass with a `validate()` method that checks for internal contradictions
+1. Store a `tournament_name` and `event_id` (if available from DataGolf response) alongside the fetch timestamp. Display the tournament name in the UI, not just a date.
+
+2. Never infer "current week" from calendar arithmetic. Instead, check if the stored projections are for the same tournament the user is building lineups for. The simplest approach: show the tournament name from the projections and let the user confirm it matches their GameBlazers contest.
+
+3. Handle the off-week case: if the DataGolf API returns an empty field or an HTTP error, do NOT overwrite the previous week's data. Log the failure and show a "No current projections available" message instead of silently serving stale data.
+
+4. Include `fetch_timestamp` in the DB and display "Fetched X hours ago" in the UI. The staleness label (already planned in PROJECT.md) should use this timestamp, not a calendar comparison.
 
 **Warning signs:**
-- ILP returns infeasible immediately (before solver even runs meaningfully)
-- User has both a lock indicator and an exclude indicator visible for the same player row
-- Validation errors only appear after a multi-second solver timeout
+- Projections show a tournament name that does not match the current GameBlazers contest
+- During off-weeks, the staleness label says "5 days ago" but the app still offers to use the data
+- User optimizes with projections from last week's tournament without realizing
 
 **Phase to address:**
-Phase 1 of the lock/exclude milestone (constraint validation). Conflict detection is a pre-flight check, not a solver concern.
+Phase 2 (projection source selector + staleness display). The tournament name must be stored in Phase 1 (DB schema), but the UI display and staleness logic belong in Phase 2.
+
+---
+
+### Pitfall 6: DataGolf API Key Exposed in Query String Logs
+
+**What goes wrong:**
+The DataGolf API requires the key as a query parameter (`?key=API_TOKEN`). If the fetcher script logs the full request URL (common with `requests` library debug logging or `httpx` trace logging), the API key appears in plaintext in log files. If Nginx access logs or Gunicorn logs capture outbound requests (unlikely but possible with custom middleware), the key leaks there too. If the key is committed to version control in a config file, it is permanently exposed in git history.
+
+**Why it happens:**
+DataGolf chose query-parameter authentication (simpler than headers but less secure). Developers logging request URLs for debugging inadvertently log the key. The `.env` file containing the key may be accidentally committed if `.gitignore` is not configured.
+
+**How to avoid:**
+1. Add `.env` to `.gitignore` immediately (before creating the file):
+
+```gitignore
+# API keys and secrets
+.env
+```
+
+2. In the fetcher script, never log the full URL. Redact the key:
+
+```python
+import os
+import requests
+
+API_KEY = os.environ["DATAGOLF_API_KEY"]
+url = "https://feeds.datagolf.com/preds/fantasy-projection-defaults"
+params = {"tour": "pga", "site": "draftkings", "slate": "main", "key": API_KEY}
+
+logger.info("Fetching projections from %s (key=redacted)", url)
+response = requests.get(url, params=params)
+```
+
+3. Do not enable `requests` debug logging (`logging.getLogger("urllib3").setLevel(logging.DEBUG)`) in production. This logs full URLs including query parameters.
+
+4. On the VPS, restrict `.env` file permissions: `chmod 600 /opt/GBGolfOptimizer/.env` and `chown deploy:deploy /opt/GBGolfOptimizer/.env`.
+
+**Warning signs:**
+- `.env` file appears in `git status` output
+- Log files contain the string `key=` followed by the actual API token
+- DataGolf rate limit is hit unexpectedly (possible key compromise)
+
+**Phase to address:**
+Phase 1 (initial setup). The `.gitignore` entry and file permissions are day-one tasks.
+
+---
+
+### Pitfall 7: Fetcher Overwrites Good Data When DataGolf API Fails
+
+**What goes wrong:**
+The cron fetcher runs, the DataGolf API returns a 500 error or an empty response (off-week, maintenance, rate limit). The fetcher script does `DELETE FROM projections WHERE source = 'datagolf'` before inserting new rows. The insert has nothing to insert (empty response). Result: the projections table is now empty. The Flask app shows "No projections available" even though valid projections from the previous successful fetch existed.
+
+**Why it happens:**
+The "delete then insert" pattern is common for simple data refreshes. It works when the insert always succeeds. But when the external API is unreliable, the delete removes data that the insert cannot replace.
+
+**How to avoid:**
+Use a transactional "fetch, validate, then replace" pattern:
+
+```python
+def fetch_and_store():
+    response = requests.get(url, params=params)
+    response.raise_for_status()  # raises on 4xx/5xx
+
+    data = response.json()
+    if not data:
+        logger.warning("DataGolf returned empty response. Keeping existing data.")
+        return
+
+    # Validate: must have at least N players to be a real field
+    if len(data) < 20:
+        logger.warning("DataGolf returned only %d players. Likely incomplete. Keeping existing data.", len(data))
+        return
+
+    # Atomic replace within a transaction
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM projections WHERE source = 'datagolf'"))
+        conn.execute(insert_stmt, new_rows)
+    # If anything above raises, the transaction rolls back and old data is preserved
+```
+
+Key principles:
+- Validate the API response BEFORE touching the database
+- Wrap delete+insert in a single transaction so rollback preserves old data
+- Set a minimum player count threshold (a real PGA field has 120-156 players; fewer than 20 is suspicious)
+- On any failure, log the error and exit without modifying the database
+
+**Warning signs:**
+- Projections table is empty on a day when it should have data
+- Log shows "fetched 0 projections" but no error was raised
+- UI says "No projections available" despite a successful fetch earlier in the week
+
+**Phase to address:**
+Phase 1 (fetcher script implementation). The transactional replace pattern is the core of the fetcher logic.
 
 ---
 
@@ -145,11 +310,11 @@ Phase 1 of the lock/exclude milestone (constraint validation). Conflict detectio
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Store lock state by Python `id()` instead of stable composite key | Zero extra code for key generation | All locks silently break on re-upload | Never — use composite key from day one |
-| Implement only player-level lock/exclude (skip card-level) | Simpler UI and state model | Users with duplicate cards cannot optimize card selection | Acceptable for MVP if explicitly documented as limitation |
-| No pre-solve diagnostics — just return generic infeasibility notice | Saves ~30 lines of diagnostic code | Users cannot recover from self-inflicted infeasibility | Never — diagnostics must ship with lock feature |
-| Pass lock list as global state / app config rather than per-request | Avoids Flask session complexity | State shared across users (public app) or persists after session ends | Never — this is a single-user scenario but still wrong |
-| Re-run full optimize() on every lock toggle (no incremental solve) | Simple implementation, always correct | Slightly slower UX (300–500ms per toggle) | Acceptable — problem size makes full re-solve trivially fast |
+| Raw SQL strings instead of SQLAlchemy ORM models | No ORM learning curve; fewer files | Harder to add Flask-Migrate later; no model-driven migrations | Acceptable for v1.2 if schema is simple (1-2 tables). Revisit for v1.3 user accounts. |
+| Single `.env` file for all secrets (API key + DB password + Flask secret) | One file to manage | All secrets exposed if file leaks; no separation of concerns | Acceptable for single-user VPS. Use distinct env vars per secret within the file. |
+| No schema migration tool (just `CREATE TABLE IF NOT EXISTS` in fetcher) | Zero migration infrastructure | No way to track schema changes; risky for v1.3 when adding user tables | Acceptable for v1.2 initial deployment. Add Alembic before v1.3. |
+| Cron instead of systemd timer | Familiar syntax; one line to add | No built-in dependency on PostgreSQL service; no automatic retry on failure | Acceptable for a twice-weekly fetch. Systemd timer is better but not worth the complexity for 2 runs/week. |
+| Storing projections as flat rows (no normalization) | Simple queries; single table | Duplicate tournament metadata per row; slightly larger table | Acceptable forever at this scale (150 rows per fetch, 2 fetches per week). |
 
 ---
 
@@ -157,11 +322,14 @@ Phase 1 of the lock/exclude milestone (constraint validation). Conflict detectio
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| PuLP lock constraint | Add `prob += x[i] == 1` without checking if `i` is in current `available` | Pre-filter: only add lock constraints for cards present in `available`; warn for missing locked cards |
-| PuLP exclude via filter | Remove cards from `valid_cards` globally (affecting all lineups) vs. per-lineup | Apply exclusion at the `available` list level inside the loop, not by mutating `valid_cards` |
-| Flask session storage | Store card objects or `id()` references in session (not serializable) | Store only the stable composite key tuple `(player, salary, multiplier, collection)` as a plain list in session |
-| Jinja2 template lock state | Re-render full page on lock/exclude, losing scroll position | Use HTMX or a small JS snippet to update only the card table, or accept full-page reload as MVP behavior |
-| Cross-contest lock propagation | Lock applies to Tips only but user expects it to apply to all contests | Make the scope of the lock explicit in the UI ("all lineups" vs. per-contest) |
+| DataGolf API key | Hardcoded in script or committed to git | Store in `.env`, load via `os.environ`, add `.env` to `.gitignore` before first commit |
+| DataGolf API response parsing | Assuming field names without testing (e.g., `projected_points` vs. `proj_points` vs. `proj_fantasy_pts`) | Make one live API call during development and record the exact response schema. DataGolf docs do not provide a complete JSON example. |
+| DataGolf rate limit (45/min) | Calling the API from both the cron fetcher and the Flask app on demand | Fetch via cron only; Flask reads from the database. Never call the API from a web request. |
+| PostgreSQL on Ubuntu 24.04 | Default `peer` authentication blocks password-based connections from the app | Edit `pg_hba.conf`: change `local all all peer` to `local all gbgolf scram-sha-256` (or `md5`), then `sudo systemctl restart postgresql` |
+| PostgreSQL connection string | Using `localhost` in the connection string, which attempts TCP | For local Unix socket connection, use `postgresql://user:pass@/dbname`. For TCP (which `pg_hba.conf` `host` rules govern), use `postgresql://user:pass@127.0.0.1/dbname`. These are different `pg_hba.conf` rules. |
+| Cron `PATH` | Script uses `python` but cron's `PATH` is `/usr/bin:/bin` — no venv | Always use the absolute venv Python path: `/opt/GBGolfOptimizer/venv/bin/python` |
+| Cron timezone | Server set to UTC but developer expects Eastern time for "Tuesday morning" | Verify with `timedatectl` on the VPS. Convert desired local time to server timezone for the cron schedule. Or set `TZ=America/New_York` in the crontab (but test this on Ubuntu 24.04 — `CRON_TZ` has had compatibility issues). |
+| Flask app reading DB | Creating a new engine per request instead of using the app-level engine | Create the engine once in `create_app()`, store on `app.config` or as a module-level singleton. Use `pool_pre_ping=True`. |
 
 ---
 
@@ -169,9 +337,9 @@ Phase 1 of the lock/exclude milestone (constraint validation). Conflict detectio
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Re-solving ILP from scratch on every lock toggle with full diagnostics | Each toggle triggers 3–5 sequential PuLP solves (one per lineup) | At current scale (18–35 cards, 5 lineups), total solve time is <200ms — full re-solve is fine | Would only matter at 1,000+ cards; irrelevant for this app |
-| Running diagnostic pre-checks in Python after solver returns infeasible | Negligible — pure Python arithmetic | Keep diagnostics as pre-filters, not post-solve analysis | No threshold — always fast |
-| Storing lock state in Flask cookie session | Cookie size limit ~4KB — not a risk at current scale | Session stores at most a handful of card keys per session | Would require server-side sessions at 50+ locked cards per session |
+| Opening a new DB connection per request (no pooling) | 200-500ms latency added per request; PostgreSQL `max_connections` exhausted | Use SQLAlchemy engine with connection pool (default behavior) | At 10+ concurrent requests; unlikely for single-user but still bad practice |
+| Fetcher script holds DB connection open during API call | Connection idle for 2-5 seconds during HTTP request; blocks pool | Fetch data first, close HTTP, then open DB connection and insert | Never a real problem at this scale, but good hygiene |
+| Loading all historical projections when only current week is needed | Query returns thousands of rows; slow page load | Always filter by `tournament_name` or `fetch_date >= threshold` in the SQL query | At 50+ weeks of historical data (~7,500 rows) |
 
 ---
 
@@ -179,8 +347,11 @@ Phase 1 of the lock/exclude milestone (constraint validation). Conflict detectio
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Accepting lock/exclude lists from POST body without bounding their size | Malicious input with 10,000 "locked" cards causes O(n²) constraint generation | Validate: `len(locks) <= roster_size` and `len(excludes) <= total_card_count` before processing |
-| Trusting composite card keys from client without verifying they match uploaded roster | User crafts fake card keys to probe optimizer behavior | Re-validate all lock/exclude keys against the current session's parsed card pool — discard any key not present in current roster |
+| DataGolf API key in git history | Key compromised; anyone with repo access can use the API quota | `.gitignore` `.env` before creating it. If accidentally committed, rotate the key on DataGolf immediately and use `git filter-branch` or `BFG Repo-Cleaner` to purge history. |
+| PostgreSQL password in `DATABASE_URL` committed to source | Database compromised if repo is public or shared | Same `.env` pattern: `DATABASE_URL=postgresql://user:pass@127.0.0.1/dbname` in `.env`, loaded via `os.environ` in `create_app()` |
+| `.env` file readable by all users on VPS | Any process/user on the server can read secrets | `chmod 600 .env` and `chown deploy:deploy .env` immediately after creation |
+| Cron log file contains API key (logged in URL) | Key exposure via log file access | Never log the full request URL. Redact the key parameter in all log output. |
+| No input validation on DataGolf API response before DB insert | SQL injection if DataGolf response is somehow tampered (extremely unlikely but defensive) | Use parameterized queries (SQLAlchemy `text()` with `:param` syntax or ORM insert). Never use f-strings or string formatting for SQL. |
 
 ---
 
@@ -188,25 +359,24 @@ Phase 1 of the lock/exclude milestone (constraint validation). Conflict detectio
 
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| No visual distinction between "card locked" and "golfer locked" | User locks a card thinking it locks the golfer; optimizer uses a different card for same player | Use distinct icons/labels: card icon for card-level, player icon for golfer-level |
-| Lock/exclude state not cleared when new CSVs are uploaded | User uploads new week's roster but old locks apply to players no longer in field — silent no-op or wrong lineups | Reset all lock/exclude state on new upload, show a banner: "Locks and excludes cleared for new upload" |
-| No feedback when a lock is unresolvable (e.g., locked card consumed in lineup 1, missing in lineup 2) | User sees lineup 2 without the "locked" player and assumes the optimizer is broken | Show per-lineup lock resolution: "Card locked in lineup 1; not available for lineup 2" |
-| Optimize button triggers re-solve even when no locks changed | User expects live preview on toggle; instead must click optimize repeatedly | Show a "Re-optimize" call-to-action whenever lock/exclude state changes from the last optimization run |
-| Locked/excluded cards shown mixed with eligible cards in card table | User loses track of constraint state while adjusting multiple locks | Group or visually separate locked/excluded cards from the eligible pool in the table |
-| No "clear all locks" or "clear all excludes" button | User must individually toggle off each lock/exclude when starting fresh | Provide "Clear all" actions, especially important before uploading new projections |
+| No indication of which tournament the projections are for | User optimizes with projections from last week's tournament | Display tournament name prominently: "Projections: The Masters (fetched 3 hours ago)" |
+| Staleness label shows date only, not age | "Fetched 2026-03-18" means nothing without context; user must do mental math | Show relative age: "Fetched 2 days ago" alongside the absolute date |
+| DataGolf source selected but no data available — blank results | User thinks the app is broken | Show an explicit message: "No DataGolf projections available for this week. Upload a CSV or check back Tuesday." |
+| Projection source selector resets on page reload | User selects DataGolf, optimizes, reloads page, source resets to default | Store the last-used source in Flask session. Pre-select it on next visit. |
+| Switching projection source requires re-uploading roster | User already uploaded roster, switches from CSV to DataGolf, app demands roster again | Roster should persist in session (already does via `card_pool_json`). Switching projection source re-matches against the existing roster card pool. |
 
 ---
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Card lock in multi-lineup context:** Verify that a card-level lock applies only to the lineup where the card is available, and a clear notice is shown for subsequent lineups where the card has been consumed.
-- [ ] **Golfer lock with single card:** If the only card for a locked golfer is consumed in lineup 1, lineup 2 should produce an infeasibility notice that names the golfer — not a generic "could not build" message.
-- [ ] **Salary infeasibility diagnosis:** When infeasible after adding locks, the error message states the locked salary sum and how much salary remains for remaining slots — not just "infeasible."
-- [ ] **Collection limit infeasibility diagnosis:** When locked cards violate a collection limit, the error names the collection type and counts: "3 Weekly Collection cards locked but only 3 are allowed — no slots remain for other lineups."
-- [ ] **Lock/exclude reset on new upload:** Upload a new CSV after setting locks, then optimize — verify no locks carry over and the notice is displayed.
-- [ ] **Conflict detection:** Lock a card and exclude the same golfer — verify the backend rejects this with a specific error before attempting to solve.
-- [ ] **Re-optimize state indicator:** Change a lock after optimizing — verify the UI shows a "stale results" warning prompting re-optimization.
-- [ ] **Empty lock/exclude sets:** Optimize with zero locks and zero excludes — verify identical behavior to v1.0 (regression test).
+- [ ] **Cron environment:** Run the fetcher script via cron at least once on the VPS and verify the log file shows a successful fetch with data. Do not rely on manual SSH execution as proof.
+- [ ] **PostgreSQL auth:** Connect to the database from the Flask app using the same user/password as the fetcher script. Test both `create_app()` startup and an actual query. Peer auth will silently fail for non-matching Linux users.
+- [ ] **Off-week behavior:** Manually test what the DataGolf API returns when no event is active. Does it return 200 with an empty array? 404? 200 with last week's data? The fetcher must handle all three cases without corrupting stored data.
+- [ ] **Player name matching end-to-end:** Run DataGolf projections through `normalize_name()` and compare against a real GameBlazers roster export. Count unmatched players. If more than 2-3 are unmatched, investigate name format differences.
+- [ ] **Connection pool under Gunicorn:** Start the app with `gunicorn --workers 2` and make 10 rapid requests. Check `pg_stat_activity` for connection count. It should be <= `2 * pool_size`, not growing unboundedly.
+- [ ] **Log rotation:** Verify `/etc/logrotate.d/datagolf-fetch` exists and works. Without it, the log file grows forever on a VPS with limited disk.
+- [ ] **Stale data label:** Wait until projections are 3+ days old and verify the UI shows a staleness warning, not a "current" label.
+- [ ] **Transaction rollback:** Kill the fetcher script mid-execution (Ctrl+C during insert). Verify the projections table still has the previous valid data, not a partial or empty state.
 
 ---
 
@@ -214,11 +384,13 @@ Phase 1 of the lock/exclude milestone (constraint validation). Conflict detectio
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Lock state corrupted / stale after re-upload | LOW | Clear all session state (provide "reset" button); no data loss |
-| Infeasibility from too many locks | LOW | Pre-solve diagnostics guide user to remove conflicting locks; no code change needed |
-| Card vs. golfer lock confusion causing wrong lineups | MEDIUM | Add UI labels + backend constraint distinction; requires template + state model changes |
-| Conflicting lock+exclude state shipped without validation | MEDIUM | Add `validate()` method to `ConstraintSet`; add conflict check to optimize route before solve |
-| Lock constraint not surviving card consumption across lineups | HIGH | Requires redesign of card vs. golfer lock semantics; affects UI, state model, and ILP layer simultaneously |
+| API key committed to git | MEDIUM | Rotate key on DataGolf dashboard. Purge from git history with `BFG Repo-Cleaner`. Update `.env` on VPS. |
+| Cron silently failing for weeks | LOW | Check `/var/log/datagolf-fetch.log`. Fix the issue (usually missing env var or wrong Python path). Run fetcher manually to backfill. |
+| Projections table emptied by bad fetch | LOW | If using transactions: automatic rollback means data was never lost. If not: re-run fetcher manually or upload CSV as fallback. |
+| PostgreSQL connection exhaustion | LOW | Restart Gunicorn (`sudo systemctl restart gbgolf`). Fix pool configuration. Connections are released on process exit. |
+| Player name mismatches discovered post-deploy | LOW | Add entries to alias table. Re-run matching against stored projections. No data re-fetch needed. |
+| Wrong timezone in cron schedule | LOW | Edit crontab, fix the hour. Run fetcher manually to catch up for the missed window. |
+| Schema needs to change after initial deployment | MEDIUM | If no migration tool: write a manual `ALTER TABLE` script. If using Alembic: generate migration. Either way, back up the database first with `pg_dump`. |
 
 ---
 
@@ -226,25 +398,42 @@ Phase 1 of the lock/exclude milestone (constraint validation). Conflict detectio
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| Infeasibility with no useful message after locking | Phase 1: Lock constraint layer + diagnostics | Lock 4 expensive cards into 6-card lineup — error message names the salary conflict |
-| Lock constraint leaking across sequential lineup loop | Phase 1: Card vs. golfer lock distinction | Lock a golfer with one card — verify card appears in lineup 1, infeasibility notice names golfer in lineup 2 |
-| Stale session state after CSV re-upload | Phase 1: State management design with stable composite keys | Upload CSVs, lock a player, upload new CSVs — verify locks are cleared and notice shown |
-| Card vs. golfer exclude ambiguity | Phase 1: UI design + data model (two separate stored sets) | User with duplicate cards — exclude one card, verify other card still selectable |
-| Conflicting lock + exclude constraints | Phase 1: Constraint validation pre-flight check | Lock a card + exclude same golfer — verify error before solve, no ILP call made |
-| No visual feedback when lock/exclude state is stale | Phase 2: UI re-optimize indicator | Set a lock, verify "Re-optimize" indicator appears; click optimize, verify indicator clears |
+| Cron cannot see API key | Phase 1: Fetcher + cron setup | Run `sudo -u deploy crontab -l` to verify entry, then check log after next scheduled run |
+| Silent cron failures (no logging) | Phase 1: Cron setup | Verify log file exists and contains timestamped output after first cron execution |
+| Connection pool shared across forked workers | Phase 1: PostgreSQL + engine setup | `gunicorn --workers 2`, query `pg_stat_activity`, confirm connection count is bounded |
+| Player name mismatches | Phase 2: Projection matching integration | Run DataGolf data through `normalize_name()` + match against real roster, count unmatched |
+| "Current week" boundary errors | Phase 2: Staleness display + source selector | Test during off-week and on Monday (post-tournament) to verify correct labels |
+| API key in logs or git | Phase 1: Initial `.env` setup | `grep -r "key=" /var/log/datagolf-fetch.log` returns nothing; `.env` not in `git ls-files` |
+| Fetcher overwrites good data on API failure | Phase 1: Fetcher script | Simulate API failure (wrong key or network disconnect), verify DB retains previous data |
+| PostgreSQL peer auth blocks app connection | Phase 1: PostgreSQL setup | Flask app starts without `FATAL: Peer authentication failed` in Gunicorn logs |
+| No schema migration path for v1.3 | Phase 1: DB schema design | Schema uses `CREATE TABLE IF NOT EXISTS` with columns designed for future expansion; document the schema for Alembic adoption in v1.3 |
 
 ---
 
 ## Sources
 
-- Existing codebase analysis: `gbgolf/optimizer/engine.py`, `gbgolf/optimizer/__init__.py`, `gbgolf/web/routes.py`, `gbgolf/data/models.py` — HIGH confidence (direct code inspection)
-- ILP lock constraint mechanics (equality constraint `x[i] == 1` in PuLP): PuLP documentation and coin-or/pulp GitHub issue discussions — HIGH confidence
-- DFS optimizer lock/exclude UX patterns: RotoWire NFL DFS Optimizer FAQ, FantasyPros DFS optimizer docs — MEDIUM confidence (different sport/platform, patterns transferable)
-- Over-locked infeasibility patterns: DFS community documentation (SaberSim, Fantasy Footballers) — MEDIUM confidence (verified multiple sources agree)
-- Flask session stale state patterns: flask-session readthedocs, TestDriven.io Flask sessions article — MEDIUM confidence
-- PuLP infeasibility diagnosis with CBC (no native IIS support): blend360 OptimizationBlog, coin-or/pulp GitHub issues — MEDIUM confidence (CBC does not compute IIS natively; pre-solve diagnostics are the correct alternative)
-- Constraint conflict detection as pre-flight check: ILP modeling guides (AIMMS Modeling Guide), operational research patterns — HIGH confidence
+### HIGH confidence
+- [Crontab environment variables](https://cronitor.io/guides/cron-environment-variables) -- cron does not inherit interactive shell environment
+- [SQLAlchemy 2.0 Connection Pooling docs](https://docs.sqlalchemy.org/en/20/core/pooling.html) -- `pool_pre_ping`, `pool_size`, forking behavior, `engine.dispose()` in post_fork
+- [Handling Timezone Issues in Cron Jobs (2025)](https://dev.to/cronmonitor/handling-timezone-issues-in-cron-jobs-2025-guide-52ii) -- `CRON_TZ` compatibility issues, DST pitfalls
+- [Install and configure PostgreSQL on Ubuntu](https://documentation.ubuntu.com/server/how-to/databases/install-postgresql/) -- default peer auth, `pg_hba.conf` configuration
+- [DataGolf API Access docs](https://datagolf.com/api-access) -- key as query parameter, 45 req/min rate limit, `fantasy-projection-defaults` endpoint parameters
+- [PSA: API Rate Limits (DataGolf Forum)](https://forum.datagolf.com/t/psa-api-rate-limits/2511) -- rate limit enforcement details
+- Existing codebase: `gbgolf/data/matching.py` `normalize_name()` -- current name normalization logic (NFKD + combining mark removal)
+- Existing codebase: `deploy/gbgolf.service` -- Gunicorn worker count (2), no `--preload` flag
+- Existing codebase: `gbgolf/web/__init__.py` -- `create_app()` factory pattern, no DB engine currently
+
+### MEDIUM confidence
+- [SQLAlchemy connection pool within multiple threads and processes](https://davidcaron.dev/sqlalchemy-multiple-threads-and-processes/) -- practical Gunicorn + SQLAlchemy patterns
+- [How to Add Flask-Migrate to an Existing Project](https://blog.miguelgrinberg.com/post/how-to-add-flask-migrate-to-an-existing-project) -- migration bootstrapping for existing apps
+- [DataGolf FAQ](https://datagolf.com/frequently-asked-questions) -- projection update timing (re-run when tee times released, typically Tuesday)
+- [Ubuntu cron logs guide](https://last9.io/blog/ubuntu-cron-logs/) -- syslog cron logging, output redirection patterns
+
+### LOW confidence (needs live verification)
+- DataGolf API response field names: documentation confirms `player_name` field exists but complete JSON structure requires a live API call to verify
+- DataGolf off-week behavior: no documentation found on what the API returns when no event is active; must be tested empirically
+- GameBlazers player name format: no public documentation; must be compared against actual roster export
 
 ---
-*Pitfalls research for: Adding manual lock/exclude to GB Golf Optimizer ILP engine*
-*Researched: 2026-03-14*
+*Pitfalls research for: Adding DataGolf API, PostgreSQL, and cron to GB Golf Optimizer*
+*Researched: 2026-03-25*

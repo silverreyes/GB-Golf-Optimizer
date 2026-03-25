@@ -1,493 +1,536 @@
 # Architecture Research
 
-**Domain:** Flask + PuLP fantasy golf optimizer — manual lock/exclude integration
-**Researched:** 2026-03-14
-**Confidence:** HIGH (based on direct codebase inspection)
+**Domain:** Integrating DataGolf API fetcher + PostgreSQL into existing Flask/Gunicorn golf optimizer
+**Researched:** 2026-03-25
+**Confidence:** HIGH (codebase inspection + verified patterns from Flask/SQLAlchemy/PostgreSQL docs)
 
 ---
 
-## Context: What Was Actually Built (v1.0)
+## Context: Current v1.1 Architecture (What Exists Today)
 
-The pre-v1.0 research document described FastAPI. The actual implementation is Flask. This file supersedes that document for all milestone planning purposes.
-
-v1.0 is a stateless request-response app. Every POST to `/` re-parses CSVs, re-filters, and re-runs the full ILP solve. There is no session persistence, no card identity across requests, no JavaScript-driven re-optimization. The single template (`index.html`) handles both the upload form state and the results display.
-
----
-
-## Standard Architecture (Current v1.0)
+The app is a stateless Flask application with two routes. All state lives in-request (card pool serialized to a hidden form field) or in Flask's cookie session (lock/exclude constraints). There is no database, no background jobs, and no external API calls.
 
 ```
-+------------------------------------------------------------------+
-|                      Browser (HTML/Jinja2)                        |
-|  GET /   ->  upload form (index.html, details[open])             |
-|  POST /  ->  same template, results injected, details[closed]    |
-+------------------------------+-----------------------------------+
-                               |
-                               v  multipart/form-data POST
-+------------------------------------------------------------------+
-|              Flask Blueprint (gbgolf/web/routes.py)               |
-|                                                                  |
-|  index() GET  ->  render_template("index.html")                  |
-|                                                                  |
-|  index() POST ->                                                 |
-|    1. Save uploads to NamedTemporaryFile                         |
-|    2. validate_pipeline(roster, projections, config)             |
-|    3. optimize(valid_cards, contests)                            |
-|    4. render_template("index.html", result=result)               |
-+-----+-------------------+------------------------------------------+
-      |                   |
-      v                   v
-+------------+   +---------------------+
-| data/      |   | optimizer/          |
-| __init__.py|   | __init__.py         |
-|            |   |                     |
-| parse_     |   | optimize()          |
-| roster_csv |   |   for each contest: |
-| parse_     |   |     for each entry: |
-| proj_csv   |   |       _solve_one_   |
-| match_     |   |       lineup()      |
-| projections|   |       (PuLP ILP)    |
-| apply_     |   +---------------------+
-| filters    |
-+------------+
+Browser
+  |
+  v  POST multipart/form-data
++----------------------------------------------------------------+
+|  Flask Blueprint (gbgolf/web/routes.py)                        |
+|                                                                |
+|  POST /         upload roster CSV + projections CSV            |
+|    -> validate_pipeline() -> optimize() -> render results      |
+|                                                                |
+|  POST /reoptimize   re-run with lock/exclude from form state   |
+|    -> deserialize card_pool -> optimize() -> render results    |
++-----+-----------------------+---------------------------------+
+      |                       |
+      v                       v
++---------------+   +--------------------+
+| gbgolf/data/  |   | gbgolf/optimizer/  |
+| CSV parsing   |   | ILP engine (PuLP)  |
+| validation    |   | constraints        |
+| matching      |   | two-phase locks    |
++---------------+   +--------------------+
+```
+
+**Key characteristics of the current design:**
+- `create_app()` in `gbgolf/web/__init__.py` is the application factory
+- `wsgi.py` calls `create_app()` and exposes `app` for Gunicorn
+- Gunicorn runs 2 workers, binding to a Unix socket, behind Nginx
+- systemd manages the Gunicorn process
+- Card pool roundtrips via a serialized JSON hidden field (not stored server-side)
+- Projections come exclusively from user-uploaded CSV files
+- No database dependency at all
+
+---
+
+## Target v1.2 Architecture
+
+```
+                                  +-------------------+
+                                  | System Cron       |
+                                  | (Tue/Wed 7am ET)  |
+                                  +--------+----------+
+                                           |
+                                           v
+                              +---------------------------+
+                              | flask fetch-projections   |
+                              | (Flask CLI command)       |
+                              |                           |
+                              | 1. HTTP GET DataGolf API  |
+                              | 2. Parse JSON response    |
+                              | 3. INSERT into PostgreSQL |
+                              +------------+--------------+
+                                           |
+                                           v
++------+    +-------------------+    +-----------+
+|      |    | Flask App         |    |           |
+| Nginx+--->| (Gunicorn x2)    +--->| PostgreSQL|
+|      |    |                  |    |           |
++------+    | POST /           |    +-----------+
+            |   roster CSV +   |         ^
+            |   source select  |         |
+            |   -> if "datagolf"|--------+
+            |      query DB    |    read projections
+            |   -> if "csv"    |
+            |      parse file  |
+            |   -> optimize()  |
+            |                  |
+            | POST /reoptimize |
+            |   (unchanged)    |
+            +------------------+
 ```
 
 ### Component Responsibilities
 
-| Component | Responsibility | File |
-|-----------|----------------|------|
-| `routes.py` | HTTP boundary: receive files, call pipeline, render template | `gbgolf/web/routes.py` |
-| `data/__init__.py` | Orchestrate parse -> enrich -> filter pipeline | `gbgolf/data/__init__.py` |
-| `filters.py` | Exclusion rules ($0, expired, no projection) | `gbgolf/data/filters.py` |
-| `models.py` | Card, ExclusionRecord, ValidationResult dataclasses | `gbgolf/data/models.py` |
-| `optimizer/__init__.py` | Multi-contest, multi-entry loop; disjoint card tracking | `gbgolf/optimizer/__init__.py` |
-| `optimizer/engine.py` | Single ILP solve via PuLP/CBC | `gbgolf/optimizer/engine.py` |
-| `index.html` | Upload form + results display in a single Jinja2 template | `gbgolf/web/templates/index.html` |
+| Component | Responsibility | Implementation |
+|-----------|----------------|----------------|
+| Cron fetcher | Fetch DataGolf API, store in DB | Flask CLI command invoked by system crontab |
+| PostgreSQL | Persistent projection storage | Single `projections` table + metadata |
+| DB module | Connection management, queries | `gbgolf/db.py` using Flask-SQLAlchemy (SQLAlchemy Core, not ORM) |
+| Source selector | Let user choose DataGolf vs CSV | New form field on existing upload page |
+| Staleness display | Show age of DB projections | Query in route, Jinja2 rendering |
 
 ---
 
-## Lock/Exclude Integration Architecture
-
-### The Core Question: Where Does State Live?
-
-The app has no persistent state. There are three options for carrying lock/exclude state:
-
-**Option A: Flask server-side session (signed cookie)**
-Store locked/excluded card identifiers in `flask.session`. The session is a signed cookie — survives across requests automatically, cleared when browser session ends or user re-uploads.
-
-**Option B: Hidden form fields (client-side only)**
-Render the current lock/exclude set as hidden `<input>` elements in the results page. Each re-optimize POST echoes them back.
-
-**Option C: Server-side storage (file/DB)**
-Store state on the server keyed by a session token. Overkill for this use case.
-
-**Recommendation: Flask session (Option A)**
-
-Rationale:
-- Server-side session stores the card CSV data from the upload in the session, enabling re-optimize without re-upload. However, cards are too large to store in a cookie (Flask's default signed-cookie session has a 4KB limit).
-- Therefore: store only the lock/exclude identifiers in the session. The actual card data must be re-submitted (or cached in server storage).
-
-**Revised recommendation: Hidden form fields + Flask session hybrid**
-
-The real constraint is that card data cannot fit in a cookie. The upload files are gone after the first request (temp files deleted). Therefore:
-
-- **Hidden fields carry the parsed card data between requests** — not the raw files, but a serialized representation (or just the lock/exclude identifiers plus a mechanism to re-parse from re-submitted data).
-- **Alternative: store the validated card list in Flask session using server-side session storage** (e.g. `flask-session` with filesystem backend).
-
-After weighing implementation cost against the single-user, low-traffic context, the cleanest approach for this milestone is:
-
-**Recommended: Re-submit data approach with hidden lock/exclude fields**
-
-1. After initial upload, render a page that includes:
-   - A hidden form with the raw CSV content (base64-encoded or as file re-upload) — this is brittle.
-
-Actually, the cleanest approach for this app is:
-
-**Final Recommendation: Two-route architecture with Flask filesystem session**
+## Recommended Project Structure (New + Modified Files)
 
 ```
-POST /upload  — parse CSVs, store ValidationResult in server-side session, redirect to /optimize
-GET  /        — show upload form
-POST /optimize — read valid_cards from session, apply lock/exclude from form POST, run ILP, return results
+gbgolf/
+  db.py                  # NEW: Flask-SQLAlchemy init, engine config
+  fetch.py               # NEW: DataGolf API client + Flask CLI command
+  data/
+    projections.py       # MODIFIED: add load_projections_from_db() function
+    models.py            # MODIFIED: no new Card fields needed (projections remain float)
+    __init__.py          # MODIFIED: update validate_pipeline to accept projection source
+  web/
+    __init__.py          # MODIFIED: init db, register CLI command
+    routes.py            # MODIFIED: source selector logic, staleness query
+    templates/
+      index.html         # MODIFIED: source selector UI, staleness label
+
+deploy/
+  gbgolf.service         # MODIFIED: add DATABASE_URL env var
+  fetch-cron             # NEW: crontab entry file (documentation/install reference)
+
+migrations/
+  001_create_projections.sql  # NEW: schema DDL
+
+tests/
+  test_fetch.py          # NEW: DataGolf client tests (mocked HTTP)
+  test_db.py             # NEW: DB read/write tests (test PostgreSQL or SQLite)
 ```
 
-This avoids re-uploading files on every lock/exclude adjustment. The `flask-session` library with a filesystem backend is a single dependency that avoids the cookie size limit.
+### Structure Rationale
 
-However, given the existing single-route architecture, a simpler alternative is available:
-
-**Simpler Alternative: Serialize valid_cards to hidden fields**
-
-The valid cards are a small set (typically 20-60 cards). Serialize them as JSON in a hidden `<textarea>` or `<input>` on the results page. On re-optimize POST, deserialize from that hidden field instead of from uploaded files. No new dependencies.
-
-**Decision: Hidden field serialization is recommended for v1.1.**
-
-Rationale: single dependency added (none), no server-side storage, consistent with the existing stateless model, low card counts make serialization trivially small (<10KB), simpler to test.
+- **`gbgolf/db.py`:** Centralizes database setup. Flask-SQLAlchemy's `db.init_app(app)` pattern fits the existing application factory. Keeps DB concerns out of route code.
+- **`gbgolf/fetch.py`:** The fetcher is a standalone concern (HTTP client + DB write). Lives at package root, not inside `data/` or `web/`, because it is invoked by CLI, not by web requests.
+- **`migrations/`:** Raw SQL migration files. No Alembic -- overkill for one table. Manual `psql -f` on the VPS.
+- **`deploy/fetch-cron`:** Documentation artifact showing the crontab line. Not automatically installed.
 
 ---
 
-## System Overview: v1.1 Lock/Exclude Architecture
+## Architectural Patterns
 
-```
-+------------------------------------------------------------------+
-|                      Browser (HTML/Jinja2)                        |
-|                                                                  |
-|  State A: Upload form (GET /)                                    |
-|    - roster + projections file inputs                            |
-|    - submit -> POST / with files                                 |
-|                                                                  |
-|  State B: Results page (POST /)                                  |
-|    - Lineups displayed                                           |
-|    - Lock/Exclude panel: checkboxes per card/player              |
-|    - Hidden field: serialized valid_cards JSON                   |
-|    - "Re-Optimize" button -> POST /reoptimize                    |
-|    - "Change files" -> GET / (clears all state)                  |
-+----------+--------------------------+-----------------------------+
-           |                          |
-  POST /   |                          | POST /reoptimize
- (upload)  |                          | (hidden JSON + lock/exclude form)
-           v                          v
-+------------------------------------------------------------------+
-|              Flask Blueprint (gbgolf/web/routes.py)               |
-|                                                                  |
-|  index() POST                  reoptimize() POST                 |
-|    parse CSVs                    deserialize valid_cards          |
-|    validate_pipeline()           parse lock_cards, exclude_cards  |
-|    -> ValidationResult           -> LockExcludeSpec              |
-|    serialize valid_cards         optimize(cards, contests, spec)  |
-|    render results + hidden       render results + hidden          |
-+------------------------------------------------------------------+
-           |                          |
-           v                          v
-+---------------------------+  +---------------------------+
-| data/ (unchanged)         |  | optimizer/ (extended)     |
-|   validate_pipeline()     |  |   optimize(cards,         |
-|   returns valid_cards     |  |           contests,       |
-|                           |  |           locks=None,     |
-|                           |  |           excludes=None)  |
-|                           |  |   _solve_one_lineup()     |
-|                           |  |     + lock constraints    |
-|                           |  |     + exclude filtering   |
-+---------------------------+  +---------------------------+
+### Pattern 1: Flask CLI Command for Cron (Not Standalone Script)
+
+**What:** The DataGolf fetcher is a `@app.cli.command()` registered in the Flask app, invoked by system cron as `flask fetch-projections`.
+
+**Why this over a standalone script:**
+- Shares the app's database configuration (DATABASE_URL from environment)
+- Runs inside Flask application context, so `db.session` / `db.engine` work identically to web request code
+- No duplicated config loading, no separate DB connection setup
+- Single source of truth for the DB connection string
+
+**Why this over APScheduler / Celery:**
+- Two cron runs per week is trivial scheduling -- no library needed
+- APScheduler inside Gunicorn creates duplicate schedulers per worker (a known footgun)
+- Celery requires a broker (Redis/RabbitMQ) -- massive overkill for 2 jobs/week
+
+**Cron invocation:**
+```bash
+# /etc/cron.d/gbgolf-fetch or user crontab for deploy user
+0 7 * * 2,3 cd /opt/GBGolfOptimizer && venv/bin/flask fetch-projections >> /var/log/gbgolf-fetch.log 2>&1
 ```
 
----
+**Trade-offs:** Cron has no retry logic. If the DataGolf API is down at 7am Tuesday, that fetch is missed. Acceptable for this use case -- Wednesday is the backup, and stale data display handles the gap. If needed later, a simple wrapper script with `|| flask fetch-projections` retry at +30min is trivial.
 
-## Component Boundaries: New vs Modified
+### Pattern 2: Flask-SQLAlchemy with SQLAlchemy Core (Not ORM)
 
-### New Components
+**What:** Use Flask-SQLAlchemy for connection lifecycle management (init_app, teardown, pool config), but write queries using SQLAlchemy Core `text()` or `Table` objects -- not the ORM (no mapped classes, no `db.Model`).
 
-| Component | What It Is | File |
-|-----------|-----------|------|
-| `LockExcludeSpec` dataclass | Carries lock_cards, lock_players, exclude_cards, exclude_players into optimizer | `gbgolf/data/models.py` (extend) |
-| `reoptimize()` route | Accepts hidden card JSON + lock/exclude form fields, runs optimizer, returns results | `gbgolf/web/routes.py` (new route) |
-| Lock/Exclude panel (HTML) | Checkboxes/toggles on results page for each card and each player | `gbgolf/web/templates/index.html` (extend) |
-| Card serialization helpers | `cards_to_json()` / `cards_from_json()` round-trip for hidden field | `gbgolf/data/models.py` or new `gbgolf/data/serialize.py` |
+**Why Flask-SQLAlchemy at all (vs raw psycopg2):**
+- Handles connection pool lifecycle with Gunicorn workers automatically (pool disposal on fork)
+- `db.session` is a scoped session tied to Flask's application context -- auto-cleanup on request teardown
+- `pool_pre_ping=True` handled via engine options, no manual keepalive code
+- One-line setup: `db.init_app(app)` in the factory
 
-### Modified Components
+**Why Core and not ORM:**
+- The app has exactly one table with simple INSERT/SELECT queries
+- No relationships, no lazy loading, no identity map -- ORM adds complexity for zero benefit
+- Raw SQL or `text()` is clearer for the 3-4 queries this feature needs
+- Keeps the codebase consistent with its current "plain dataclass" philosophy (Pydantic at boundary, dataclass internally)
 
-| Component | What Changes | Scope |
-|-----------|-------------|-------|
-| `optimize()` in `optimizer/__init__.py` | Accept optional `LockExcludeSpec`; pre-filter excludes; pass locks to engine | Additive — new parameter with default `None` |
-| `_solve_one_lineup()` in `optimizer/engine.py` | Accept locked card indices; add `x[i] == 1` constraints for locked cards | Additive — new parameter |
-| `index.html` | Add hidden field for serialized cards, add lock/exclude panel, add re-optimize form | Extend existing template |
-| `routes.py` | Keep `index()` unchanged; add `reoptimize()` route | Additive |
-
-### Unchanged Components
-
-- `gbgolf/data/filters.py` — exclusion rules for invalid cards (manual excludes are separate, applied after pipeline)
-- `gbgolf/data/roster.py`, `projections.py`, `matching.py` — parsing unchanged
-- `gbgolf/data/config.py` — contest config unchanged
-- `gbgolf/web/__init__.py` — app factory unchanged
-
----
-
-## ILP Constraint Injection
-
-### How Locked Cards Are Expressed in PuLP
-
-A card lock forces `x[i] = 1` for the locked card's index. This is a simple equality constraint:
-
+**Example query pattern:**
 ```python
-# In _solve_one_lineup(), after building x[]:
-for i in locked_indices:
-    prob += x[i] == 1
+from sqlalchemy import text
+
+def get_current_projections(db_session):
+    """Fetch the most recent projection set from the database."""
+    result = db_session.execute(text("""
+        SELECT player_name, projected_score, salary, dg_id,
+               fetched_at, event_name, tour
+        FROM projections
+        WHERE fetched_at = (SELECT MAX(fetched_at) FROM projections)
+    """))
+    return result.mappings().all()
 ```
 
-This is equivalent to fixing the variable. PuLP handles this correctly — the solver will respect it as a hard constraint. If a lock makes the problem infeasible (e.g., locking two cards from the same player, or locking 7 cards into a 6-card roster), the solver returns non-Optimal and `_solve_one_lineup` returns `None`, which surfaces as an infeasibility notice.
+### Pattern 3: Projection Source Branching in the Upload Route
 
-### How Excluded Cards Are Expressed
+**What:** The existing `POST /` route gains a `projection_source` form field. When "datagolf" is selected, projections come from the DB instead of a CSV upload. When "csv" is selected, the existing CSV upload flow is unchanged.
 
-Excluded cards are simply removed from the card pool before the ILP is built. No PuLP constraint needed — filtering at the Python level is cleaner and avoids unnecessary variables in the model.
+**Why modify the existing route (not a new route):**
+- The upload route already handles the full pipeline: parse roster -> merge projections -> filter -> optimize -> render
+- A new route would duplicate the roster parsing, optimization, and rendering logic
+- The only branching point is "where do projections come from?" -- a single `if/else` at line ~100 in routes.py
+- The reoptimize route needs zero changes (it already works from serialized card_pool)
 
+**Branching logic:**
 ```python
-# In optimize(), before calling _solve_one_lineup():
-available = [c for c in available if c not in excluded_set]
+# In POST / handler:
+projection_source = request.form.get("projection_source", "csv")
+
+if projection_source == "datagolf":
+    # Query DB for current-week projections
+    projections_dict, fetch_metadata = load_projections_from_db(db.session)
+    if not projections_dict:
+        return render_template("index.html", error="No DataGolf projections available.")
+else:
+    # Existing CSV upload flow (unchanged)
+    projections_file = request.files.get("projections")
+    ...
 ```
 
-Card identity comparison must use a stable identifier, not Python `id()` (which is position-based and lost across serialization). A card needs a stable key: `(player, multiplier, salary, collection)` is unique enough in practice, or an explicit `card_id` field added to `Card`.
+**Impact on validate_pipeline():** The `validate_pipeline` function currently takes a `projections_path` string (file path). For DB-sourced projections, we need to pass a `dict[str, float]` directly. Two clean options:
 
-### Lock Semantics: Card vs. Player
+1. **Split validate_pipeline** into roster-only validation + separate projection merge -- cleanest, most testable
+2. **Accept either path or dict** via an overloaded parameter -- simpler but less clean
 
-Two distinct lock types:
-
-- **Lock card**: force one specific card (player + multiplier + salary) into a lineup. The card must appear in exactly one lineup; the optimizer picks which lineup to assign it to.
-- **Lock player**: force some card for this player to appear. Useful when user doesn't care which card is used.
-
-For v1.1, locking a card means the optimizer must include that card in one lineup (but it doesn't specify which lineup). The current architecture already tracks `used_card_ids` across lineups in the `optimize()` loop. Locked cards need to be assigned to a lineup; the simplest approach is to inject the lock constraint in the first lineup where the card hasn't yet been used.
-
-**Card lock implementation in optimizer loop:**
-
-```python
-for entry_num in range(config.max_entries):
-    available = [c for c in valid_cards if id(c) not in used_card_ids]
-
-    # Determine which locked cards are still unassigned and available in this pool
-    pending_locks = [c for c in spec.lock_cards if id(c) not in used_card_ids and c in available]
-    locked_indices = [available.index(c) for c in pending_locks]
-
-    result = _solve_one_lineup(available, config, locked_indices=locked_indices)
-```
-
-### Player lock implementation:
-
-A player lock adds a constraint that the sum of x[i] for all cards belonging to that player is >= 1:
-
-```python
-for player in spec.lock_players:
-    player_indices = [i for i, c in enumerate(cards) if c.player == player]
-    if player_indices:
-        prob += pulp.lpSum(x[i] for i in player_indices) >= 1
-```
-
-The existing same-player constraint already ensures at most one card per player, so `>= 1` combined with `<= 1` forces exactly one of their cards in.
+Recommendation: Option 1. Split `validate_pipeline` so the roster validation and projection merge are separate steps. The route orchestrates them. This avoids coupling the data layer to "file vs DB" concerns.
 
 ---
 
 ## Data Flow
 
-### Initial Upload Flow (POST /)
+### Flow 1: Cron Fetch (Background, No User Interaction)
 
 ```
-Browser: POST / with roster.csv + projections.csv
+System Cron (Tue/Wed 7am)
     |
     v
-routes.index() POST
-    -> save to temp files
-    -> validate_pipeline(roster_tmp, proj_tmp, config_path)
-       -> parse_roster_csv()
-       -> parse_projections_csv()
-       -> match_projections()
-       -> apply_filters()
-       -> returns ValidationResult{valid_cards, excluded, warnings}
-    -> optimize(valid_cards, contests)
-       -> returns OptimizationResult{lineups, unused_cards, notices}
-    -> serialize valid_cards to JSON string
-    -> render_template("index.html",
-         validation=validation,
-         result=result,
-         cards_json=cards_json,  # NEW: hidden field data
-         show_results=True)
+flask fetch-projections
     |
     v
-Browser: results page with lock/exclude panel + hidden cards_json field
-```
-
-### Re-Optimize Flow (POST /reoptimize)
-
-```
-Browser: POST /reoptimize with
-  - cards_json (hidden field)
-  - locked_cards[] (list of card keys)
-  - locked_players[] (list of player names)
-  - excluded_cards[] (list of card keys)
-  - excluded_players[] (list of player names)
+HTTP GET https://feeds.datagolf.com/preds/fantasy-projection-defaults
+    ?tour=pga&site=draftkings&slate=main&file_format=json&key=...
     |
     v
-routes.reoptimize() POST
-    -> deserialize valid_cards from cards_json
-    -> parse lock/exclude form fields into LockExcludeSpec
-    -> apply player-level excludes (filter from valid_cards)
-    -> apply card-level excludes (filter from valid_cards)
-    -> optimize(remaining_cards, contests, spec=lock_exclude_spec)
-       -> for each lineup: apply lock constraints to ILP
-    -> serialize valid_cards to JSON (same cards, unchanged)
-    -> render_template("index.html",
-         result=result,
-         cards_json=cards_json,
-         lock_spec=lock_spec,  # NEW: re-render UI with current lock state
-         show_results=True)
+Parse JSON response -> list of player projection dicts
+    |
+    v
+INSERT INTO projections (dg_id, player_name, projected_score, salary,
+    proj_ownership, event_name, tour, fetched_at)
+    -- Use INSERT ON CONFLICT (upsert) keyed on (dg_id, fetched_at::date)
+    -- so re-running the same day is idempotent
+    |
+    v
+COMMIT + log success/failure
 ```
 
-### Card Identifier Strategy
-
-Python object `id()` is used in v1.0 for cross-lineup tracking. This breaks across serialization. A card's stable identity for lock/exclude purposes is:
+### Flow 2: User Optimization with DataGolf Source
 
 ```
-card_key = (player, salary, multiplier, collection)
+Browser: User uploads roster CSV, selects "DataGolf" radio, submits
+    |
+    v
+POST / (routes.py index())
+    |
+    +-> Parse roster CSV (existing flow, unchanged)
+    |
+    +-> projection_source == "datagolf"
+    |     |
+    |     v
+    |   load_projections_from_db(db.session)
+    |     -> SELECT player_name, projected_score FROM projections
+    |        WHERE fetched_at = (SELECT MAX(fetched_at) FROM projections)
+    |     -> Returns dict[str, float] + metadata (event_name, fetched_at, age)
+    |
+    +-> match_projections(cards, projections_dict)  # existing function
+    |
+    +-> apply_filters(enriched_cards)               # existing function
+    |
+    +-> optimize(valid_cards, contests, constraints) # existing function
+    |
+    v
+render_template("index.html", result=..., projection_source="datagolf",
+    fetch_info={event_name, fetched_at, staleness_label})
 ```
 
-This is unique for all realistic cases (two cards for the same player with identical salary/multiplier/collection would be indistinguishable but this does not occur in practice given GameBlazers card structure). The key can be serialized as a URL-safe string for form fields.
+### Flow 3: User Optimization with CSV Source (Unchanged)
+
+```
+Browser: User uploads roster CSV + projections CSV, selects "CSV", submits
+    |
+    v
+POST / (routes.py index())  -- existing flow, zero changes to CSV path
+```
+
+### Flow 4: Stale Data Display
+
+```
+Browser: GET / or page load
+    |
+    v
+Query: SELECT event_name, fetched_at FROM projections
+       ORDER BY fetched_at DESC LIMIT 1
+    |
+    v
+Calculate staleness: datetime.now() - fetched_at
+    |
+    v
+Jinja2 renders:
+  - If < 24h: "DataGolf projections for [event] (updated today)"
+  - If 1-6 days: "DataGolf projections for [event] (updated X days ago)"
+  - If > 6 days: "DataGolf projections for [event] (X days old -- may be stale)"
+  - If no data: "No DataGolf projections available (upload CSV instead)"
+```
 
 ---
 
-## UI Flow Changes
+## Database Schema
 
-### State Machine
+### `projections` Table
 
+```sql
+CREATE TABLE projections (
+    id              SERIAL PRIMARY KEY,
+    dg_id           INTEGER NOT NULL,           -- DataGolf's player identifier
+    player_name     TEXT NOT NULL,               -- Display name from API
+    projected_score NUMERIC(6,2) NOT NULL,       -- Fantasy points projection
+    salary          INTEGER,                     -- DraftKings salary (informational)
+    proj_ownership  NUMERIC(5,2),                -- Projected ownership % (informational)
+    event_name      TEXT NOT NULL,               -- e.g. "THE PLAYERS Championship"
+    tour            TEXT NOT NULL DEFAULT 'pga',  -- pga, euro, opp, alt
+    fetched_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    -- Uniqueness: one projection per player per fetch-day
+    -- Allows re-fetches on same day to upsert
+    UNIQUE (dg_id, fetched_at::date)
+);
+
+-- Index for the most common query: "get latest projections"
+CREATE INDEX idx_projections_fetched_at ON projections (fetched_at DESC);
+
+-- Index for potential future query: "get projections for specific event"
+CREATE INDEX idx_projections_event ON projections (event_name, fetched_at DESC);
 ```
-GET /
-  Upload form (State 1)
-  |
-  | POST / (upload files)
-  v
-State 2: Results + Lock/Exclude Panel
-  - Lineups displayed
-  - Per-card row: [Lock] [Exclude] checkboxes
-  - Per-player section: [Lock Player] [Exclude Player]
-  - [Re-Optimize] button -> POST /reoptimize
-  - [Change Files] link -> GET / (resets everything)
-  |
-  | POST /reoptimize
-  v
-State 2 (updated results, lock/exclude preserved)
-```
 
-### Lock/Exclude Panel Design
+**Schema design notes:**
+- `dg_id` is DataGolf's stable player identifier. More reliable than name matching for future features.
+- `player_name` is stored as-is from the API. Name normalization happens at match time (existing `normalize_name()` function).
+- `salary` and `proj_ownership` are stored for informational display but are NOT used in optimization. The optimizer uses roster CSV salaries (which reflect the user's actual card salaries, not DraftKings salaries).
+- `fetched_at` uses TIMESTAMPTZ for timezone-aware timestamps.
+- The UNIQUE constraint on `(dg_id, fetched_at::date)` makes same-day re-runs idempotent via `INSERT ... ON CONFLICT DO UPDATE`.
+- **v1.3 user accounts compatibility:** This schema is user-independent. When user accounts arrive, projections remain shared (all users see the same DataGolf data). No `user_id` column needed on this table.
 
-The panel should be rendered alongside or below the results. Two sub-sections:
-
-1. **Card locks/excludes**: show all valid_cards with checkboxes. Each row: player name, multiplier, salary, collection. Checkboxes: Lock | Exclude (mutually exclusive per card).
-
-2. **Player locks/excludes** (optional for v1.1 scope): aggregate by player name. Single lock/exclude applies to any card for that player.
-
-The panel state must be reflected in the re-rendered template after re-optimize — the current lock/exclude selections should persist visually.
-
-### No JavaScript Required (Base Implementation)
-
-The re-optimize form submits via standard POST. No JavaScript needed for the base feature. The loading overlay from v1.0 applies equally to `/reoptimize` POSTs.
+**DataGolf API response fields (LOW confidence -- needs verification via test API call):**
+The exact JSON field names from the `fantasy-projection-defaults` endpoint could not be confirmed from public documentation. Based on DataGolf's website UI and unofficial libraries, the response likely includes fields like `dg_id`, `player_name`, `salary`, `proj_ownership`, and a projected points field. The fetcher implementation should include a discovery step: make one test API call and log the raw response to confirm field names before writing the parser.
 
 ---
 
-## Build Order
+## Connection Management with Gunicorn
 
-Build order is driven by two constraints: (1) ILP constraint injection must be verified before UI work, because infeasibility behavior must be understood; (2) card identity/serialization is a foundational dependency for everything else.
+### The Problem
 
-### Phase 1: Card Identity (Foundation)
+Gunicorn with `--workers 2` forks after the master process loads the app (when using `--preload`, which this project does NOT currently use). Even without preload, each worker independently calls `create_app()` and gets its own engine/pool. The risk is low with the current setup, but connection hygiene matters.
 
-**Why first:** Everything else depends on a stable card key. The current `id()` approach breaks across requests.
+### Recommended Configuration
 
-- Add `card_key` property or field to `Card` dataclass
-- Verify round-trip: `card_key -> serialize -> deserialize -> lookup`
-- Update `optimize()` to use `card_key` instead of `id()` for `used_card_ids` tracking
-- Tests: card key uniqueness across a realistic roster
+```python
+# gbgolf/db.py
+from flask_sqlalchemy import SQLAlchemy
 
-### Phase 2: ILP Constraint Injection (Core Logic)
+db = SQLAlchemy(engine_options={
+    "pool_pre_ping": True,     # Verify connections are alive before checkout
+    "pool_size": 2,            # 2 persistent connections per worker
+    "max_overflow": 3,         # Allow up to 5 total per worker under burst
+    "pool_recycle": 1800,      # Recycle connections every 30 minutes
+})
+```
 
-**Why second:** Validates the PuLP approach before building UI around it. Infeasibility cases must be understood.
+**Why these values:**
+- `pool_size=2`: Each Gunicorn worker handles one request at a time (sync workers). Two connections per worker is sufficient (one active + one spare). Total across 2 workers = 4 persistent connections.
+- `max_overflow=3`: The cron fetcher runs in a separate process with its own pool. 5 total connections per process is generous for single-threaded sync workers.
+- `pool_pre_ping=True`: PostgreSQL may close idle connections (depending on `idle_in_transaction_session_timeout`). Pre-ping avoids stale connection errors after overnight idle.
+- `pool_recycle=1800`: Safety net for long-lived connections. 30 minutes is conservative.
 
-- Add `LockExcludeSpec` dataclass to `models.py`
-- Extend `_solve_one_lineup()` with `locked_indices` parameter
-- Extend `optimize()` with `spec: LockExcludeSpec | None = None`
-- Test cases:
-  - Lock one card -> appears in a lineup
-  - Lock two cards -> each appears in a different lineup (if two lineups exist)
-  - Lock a card that conflicts (same player twice) -> infeasibility notice surfaced
-  - Exclude a card -> never appears in any lineup
-  - Exclude all cards for a player -> player absent from all lineups
-  - Lock player -> at least one of their cards appears in some lineup
+**Total PostgreSQL connections:** 2 workers x 2 pool = 4 persistent + occasional cron = 5 max. Well within PostgreSQL's default `max_connections=100`.
 
-### Phase 3: Serialization (Data Transport)
+### Application Factory Integration
 
-**Why third:** Needed for the re-optimize route but not for unit tests of the optimizer.
+```python
+# gbgolf/web/__init__.py
+from gbgolf.db import db
 
-- Implement `cards_to_json()` / `cards_from_json()` in `gbgolf/data/models.py`
-- Round-trip test: serialize ValidationResult.valid_cards -> deserialize -> same cards
-- Verify size: realistic roster (60 cards) serializes to < 50KB
+def create_app() -> Flask:
+    app = Flask(...)
 
-### Phase 4: Re-Optimize Route
+    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
+        "DATABASE_URL", "postgresql://gbgolf:password@localhost/gbgolf"
+    )
 
-**Why fourth:** Once optimizer accepts spec and cards can be serialized, the route is straightforward.
+    db.init_app(app)
 
-- Add `POST /reoptimize` route to `routes.py`
-- Parse lock/exclude form fields into `LockExcludeSpec`
-- Deserialize cards from hidden field
-- Call `optimize()` with spec
-- Re-serialize and render
+    # Register CLI commands
+    from gbgolf.fetch import register_cli
+    register_cli(app)
 
-### Phase 5: Template UI
+    from gbgolf.web.routes import bp
+    app.register_blueprint(bp)
 
-**Why last:** Pure presentation. All logic is in place; UI is wiring.
+    return app
+```
 
-- Add lock/exclude panel to `index.html`
-- Add hidden `cards_json` field to results form
-- Wire checkboxes to form fields using `card_key` as values
-- Ensure current lock state re-renders correctly after re-optimize
-- Verify loading overlay applies to `/reoptimize` form submit
+**No preload concern:** The current `gbgolf.service` does NOT use `--preload`. Each Gunicorn worker calls `create_app()` independently, meaning each worker creates its own engine and pool. No `engine.dispose()` or fork-safety hooks are needed with this setup. If `--preload` is added later for faster restarts, a `post_worker_init` hook in the Gunicorn config would be needed to dispose the inherited engine.
+
+---
+
+## Integration Points
+
+### External Services
+
+| Service | Integration Pattern | Notes |
+|---------|---------------------|-------|
+| DataGolf API | HTTP GET with API key in query string | Rate limit: 45 req/min with 5-min suspension. Fetcher makes 1 request per run, no concern. |
+| PostgreSQL | Flask-SQLAlchemy (SQLAlchemy Core) | Local socket or TCP. Managed by Ubuntu's `postgresql` service. |
+
+### Internal Boundaries
+
+| Boundary | Communication | Notes |
+|----------|---------------|-------|
+| Cron fetcher -> DB | Flask CLI command -> `db.session.execute()` -> COMMIT | Fetcher is a Flask CLI command, shares app context |
+| Web route -> DB | `db.session.execute()` read-only | Route reads projections; never writes |
+| Web route -> data layer | `match_projections(cards, proj_dict)` | Existing function works with dict from either CSV or DB |
+| Web route -> optimizer | `optimize(valid_cards, contests, constraints)` | Completely unchanged -- optimizer is projection-source-agnostic |
+| DB module -> models | Returns `dict[str, float]` (same as CSV parser) | No new model types needed for projections |
+
+### Key Isolation Property
+
+The optimizer (`gbgolf/optimizer/`) has ZERO knowledge of where projections came from. It receives `list[Card]` with `projected_score` and `effective_value` already set. This means the entire DB integration is contained within `gbgolf/db.py`, `gbgolf/fetch.py`, `gbgolf/data/projections.py`, and `gbgolf/web/routes.py`. The optimizer, engine, and constraint modules are untouched.
 
 ---
 
 ## Anti-Patterns
 
-### Anti-Pattern 1: Using Python `id()` for Card Identity Across Requests
+### Anti-Pattern 1: APScheduler Inside Gunicorn
 
-**What people do:** Keep the v1.0 `id(c)` approach and try to serialize object memory addresses.
-**Why it's wrong:** `id()` is a CPython memory address. It changes every request. Serializing it means nothing on deserialization.
-**Do this instead:** Derive a stable key from card data fields: `(player, salary, multiplier, collection)`.
+**What people do:** Embed APScheduler in the Flask app to run the fetcher on a schedule.
+**Why it's wrong:** Gunicorn spawns multiple workers. Each worker runs its own APScheduler instance. With 2 workers, the fetcher runs twice at the same time, causing duplicate inserts (or worse, race conditions). The standard "fix" (BackgroundScheduler with a file lock) adds fragile complexity.
+**Do this instead:** System cron + Flask CLI command. One invocation, guaranteed single execution, no worker duplication.
 
-### Anti-Pattern 2: Storing Lock/Exclude in Flask Server-Side Session Without Dependency
+### Anti-Pattern 2: Separate Config for Cron Script
 
-**What people do:** Install `flask-session`, configure filesystem storage, add session cleanup logic.
-**Why it's wrong:** Adds a new dependency and operational concern (session file cleanup) for a problem solvable with hidden form fields in this use case.
-**Do this instead:** Serialize card data to a hidden form field. Valid card lists are small (< 50KB for any realistic roster). Standard HTTP POST handles it.
+**What people do:** Write a standalone Python script for the cron job with its own `DATABASE_URL` hardcoded or read from a separate `.env` file.
+**Why it's wrong:** Configuration drift. The web app and cron script fall out of sync on DB credentials, connection settings, or schema assumptions.
+**Do this instead:** Flask CLI command (`flask fetch-projections`) that inherits all app config from the same `create_app()` factory.
 
-### Anti-Pattern 3: Injecting Lock Constraints as Post-Processing
+### Anti-Pattern 3: ORM Model for One Table
 
-**What people do:** Run the optimizer without locks, then swap in locked cards by hand, adjusting salaries.
-**Why it's wrong:** The resulting lineup may violate salary constraints, collection limits, or same-player rules. The ILP solver must enforce all constraints simultaneously.
-**Do this instead:** Inject lock constraints directly into the PuLP problem before solving. The solver handles all constraint interactions.
+**What people do:** Create a `db.Model` subclass with `SQLAlchemy.Column` definitions for the projections table.
+**Why it's wrong for this project:** The app has one table with 3-4 simple queries. ORM adds a mapped class, session identity map complexity, lazy loading confusion, and a migration tool dependency (Alembic). All for zero benefit when the queries are trivial `INSERT` and `SELECT`.
+**Do this instead:** SQLAlchemy Core with `text()` queries. Write raw SQL that's immediately readable.
 
-### Anti-Pattern 4: Locking a Specific Card to a Specific Lineup Slot
+### Anti-Pattern 4: Storing Card Pool in Database
 
-**What people do:** Add UI to let users specify "lock this card to Lineup 2 of The Tips."
-**Why it's wrong:** Over-constrains the problem. Users care that a card appears somewhere across their lineups, not which numbered slot. Cross-lineup assignment is the optimizer's job.
-**Do this instead:** Lock means "this card must appear in some lineup." The optimizer loop naturally assigns it to the first feasible lineup. If the user wants a card in a specific lineup, that's a v2 feature with significant added complexity.
+**What people do:** Move the card pool from the hidden form field to a database table, thinking it's "more proper."
+**Why it's wrong for this project:** The card pool is per-session, ephemeral, and changes every time the user uploads a new roster CSV. Storing it in the DB adds a cleanup problem (when to delete old pools?), a user identification problem (no user accounts in v1.2), and gains nothing over the current hidden field approach.
+**Do this instead:** Keep the hidden form field for card pool serialization. It works, it's stateless, and it'll naturally transition to user-account-scoped storage in v1.3.
 
-### Anti-Pattern 5: Applying Excludes as ILP Constraints
+### Anti-Pattern 5: New Route for DataGolf Optimization
 
-**What people do:** Add `x[i] == 0` constraints for excluded cards.
-**Why it's wrong:** The excluded card still takes up a variable slot in the ILP model, slightly inflating problem size with no benefit.
-**Do this instead:** Filter excluded cards from the `available` list before building the PuLP problem. Fewer variables, cleaner model.
-
----
-
-## Integration Points Summary
-
-| Integration Point | New or Modified | Notes |
-|-------------------|----------------|-------|
-| `Card.card_key` property | Modified (Card dataclass) | Stable identity for lock/exclude tracking and serialization |
-| `LockExcludeSpec` dataclass | New | Carries lock_cards, lock_players, exclude_cards, exclude_players |
-| `_solve_one_lineup(locked_indices)` | Modified (additive) | New parameter, default empty list |
-| `optimize(spec=None)` | Modified (additive) | New parameter, backward-compatible |
-| `cards_to_json()` / `cards_from_json()` | New | Serialization for hidden form field |
-| `POST /reoptimize` route | New | Separate from upload route |
-| `index.html` lock/exclude panel | New UI section | Checkboxes, hidden field, re-optimize form |
-| `index.html` hidden cards_json field | New hidden input | Carries card data between requests |
+**What people do:** Create a separate `POST /optimize-datagolf` route instead of modifying the existing upload route.
+**Why it's wrong:** Duplicates roster parsing, optimization, rendering, and template logic. Two routes that do 90% the same thing diverge over time.
+**Do this instead:** Add `projection_source` form field to the existing `POST /` route. The branching is one `if/else` at the projection loading step.
 
 ---
 
 ## Scaling Considerations
 
-This app is single-user, single-server. No scaling work is needed. The optimizer runs in < 500ms for realistic card pools (20-80 cards, 5 lineups). Lock/exclude adds negligible constraint count. These are not concerns for v1.1.
+| Scale | Architecture Adjustments |
+|-------|--------------------------|
+| Current (1-5 users) | 2 Gunicorn workers, pool_size=2, single PostgreSQL instance. More than sufficient. |
+| 10-50 users | No changes needed. PostgreSQL handles concurrent reads easily. ILP solve time is the bottleneck (~100ms per lineup), not DB. |
+| 100+ users | Consider server-side session storage (Redis or DB) instead of cookie sessions. Card pool hidden field size could become a concern with large rosters. This is a v1.3+ concern. |
+
+### What Breaks First
+
+1. **Cookie session size** (4KB limit): With many lock/exclude constraints, the cookie approaches its limit. Not a v1.2 concern (locks are small), but worth monitoring.
+2. **Hidden form field size**: A large roster (200+ cards) serialized to JSON could slow page rendering. Not realistic for current GameBlazers roster sizes (~50-80 cards).
+3. **ILP solve time**: PuLP/CBC solves in <100ms for current roster sizes. Would only be a concern at 500+ cards, which GameBlazers doesn't produce.
+
+None of these are v1.2 concerns. The DB integration adds no new scaling bottleneck.
+
+---
+
+## Build Order (Suggested Phases for v1.2)
+
+The build order respects dependencies: DB before fetcher (fetcher writes to DB), fetcher before UI (UI reads from DB).
+
+### Phase 1: Database Foundation
+1. Install PostgreSQL on VPS, create `gbgolf` database and user
+2. Create `gbgolf/db.py` with Flask-SQLAlchemy setup
+3. Write `migrations/001_create_projections.sql`
+4. Modify `create_app()` to call `db.init_app(app)`
+5. Add `DATABASE_URL` to systemd service environment
+6. Tests: verify DB connection in test fixture, basic read/write
+
+### Phase 2: DataGolf Fetcher
+1. Create `gbgolf/fetch.py` with API client and Flask CLI command
+2. Implement API response parsing (confirm field names via test call first)
+3. Implement upsert logic (INSERT ON CONFLICT)
+4. Register CLI command in `create_app()`
+5. Tests: mock HTTP responses, verify DB writes
+6. Deploy: add crontab entry on VPS
+
+### Phase 3: Projection Source Selector + Staleness
+1. Add `load_projections_from_db()` to `gbgolf/data/projections.py`
+2. Refactor `validate_pipeline()` to accept projection dict directly (not just file path)
+3. Modify `POST /` route to branch on `projection_source` form field
+4. Add projection source radio buttons to `index.html`
+5. Implement staleness label (query latest `fetched_at`, compute age)
+6. Tests: full integration test with both sources
+
+### Phase 4: Deploy + Verify
+1. Run migration on VPS PostgreSQL
+2. Deploy updated app code
+3. Verify cron fetcher runs successfully
+4. Verify both projection sources work in the UI
+5. Test stale data display with old and current data
 
 ---
 
 ## Sources
 
-- Direct codebase inspection: `gbgolf/optimizer/engine.py`, `gbgolf/optimizer/__init__.py`, `gbgolf/web/routes.py`, `gbgolf/data/models.py`, `gbgolf/data/filters.py`, `gbgolf/web/templates/index.html` — HIGH confidence
-- PuLP documentation: equality constraints on binary variables (`x[i] == 1`) are valid and correctly handled by CBC — HIGH confidence (standard ILP technique)
-- Flask hidden form fields for stateless re-submission: standard web pattern — HIGH confidence
+- [Flask Application Factories](https://flask.palletsprojects.com/en/stable/patterns/appfactories/) -- official Flask docs
+- [Flask CLI Commands](https://flask.palletsprojects.com/en/stable/cli/) -- official Flask docs
+- [Flask + Gunicorn Deployment](https://flask.palletsprojects.com/en/stable/deploying/gunicorn/) -- official Flask docs
+- [SQLAlchemy Connection Pooling](https://docs.sqlalchemy.org/en/20/core/pooling.html) -- official SQLAlchemy 2.0 docs (HIGH confidence)
+- [Flask-SQLAlchemy Configuration](https://flask-sqlalchemy.readthedocs.io/en/stable/config/) -- official Flask-SQLAlchemy docs (HIGH confidence)
+- [SQLAlchemy with Forked Processes](https://davidcaron.dev/sqlalchemy-multiple-threads-and-processes/) -- David Caron analysis (MEDIUM confidence, verified against SQLAlchemy docs)
+- [Flask Cron Jobs Architecture](https://blog.miguelgrinberg.com/post/run-your-flask-regularly-scheduled-jobs-with-cron) -- Miguel Grinberg (MEDIUM confidence)
+- [DataGolf API Access](https://datagolf.com/api-access) -- official DataGolf docs (HIGH confidence for endpoint/params, LOW confidence for response fields)
 
 ---
-
-*Architecture research for: GB Golf Optimizer v1.1 lock/exclude integration*
-*Researched: 2026-03-14*
+*Architecture research for: GBGolfOptimizer v1.2 -- DataGolf API + PostgreSQL integration*
+*Researched: 2026-03-25*

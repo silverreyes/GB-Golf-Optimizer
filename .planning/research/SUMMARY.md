@@ -1,17 +1,17 @@
 # Project Research Summary
 
-**Project:** GB Golf Optimizer v1.1 — Manual Lock/Exclude Milestone
-**Domain:** ILP-based DFS golf lineup optimizer (GameBlazers-specific)
-**Researched:** 2026-03-14
+**Project:** GB Golf Optimizer v1.2 — Automated Projection Fetching
+**Domain:** DataGolf API integration + PostgreSQL storage + cron scheduling for Flask DFS golf optimizer
+**Researched:** 2026-03-25
 **Confidence:** HIGH
 
 ## Executive Summary
 
-The GB Golf Optimizer v1.0 is a stateless Flask + PuLP app that parses two CSVs (roster and projections), runs an ILP solve, and renders lineups in a single request-response cycle. The v1.1 milestone adds manual lock/exclude controls — the single most universal feature in all mainstream DFS optimizers. Research confirms the feature is well-understood in the industry, but GameBlazers' card-based system with duplicate golfer cards at different multipliers introduces two distinctions standard tools never have to address: card-level lock/exclude versus golfer-level lock/exclude. These distinctions must be built into the data model, ILP constraint layer, and UI from day one — they cannot be bolted on after the fact.
+GBGolfOptimizer v1.2 extends a validated, stateless Flask optimizer (already running on Ubuntu 24.04 with Gunicorn + Nginx + systemd) by adding automated projection fetching from the DataGolf API, PostgreSQL-backed projection storage, and a UI source selector so users can choose between DataGolf projections and their own CSV uploads. The research shows this is a well-scoped addition: one new external dependency (the DataGolf `fantasy-projection-defaults` endpoint), one new storage layer (PostgreSQL with a single `projections` table), and a handful of targeted code changes to the existing upload route. The existing optimizer, constraints engine, and card pool logic remain entirely untouched.
 
-The recommended implementation approach is a hidden-field serialization architecture: valid cards are serialized to JSON in a hidden form field on the results page, and a new `/reoptimize` POST route deserializes them, applies lock/exclude constraints, and re-runs the ILP without requiring file re-upload. This adds zero new dependencies to the existing stack (Flask, PuLP, Jinja2, Pydantic v2) and stays consistent with the app's established stateless POST/render pattern. Flask's built-in session cookie is sufficient for the lock/exclude state payload (well under the 4KB limit), but the architecture research recommends hidden fields for the card data itself to avoid the cookie size risk entirely.
+The recommended approach is to add PostgreSQL via Flask-SQLAlchemy (Core queries only, no ORM), drive the scheduled fetch via a system cron invoking a Flask CLI command, and use `httpx` for the single HTTP call to DataGolf. This stack minimizes new dependencies while setting the foundation for v1.3 user accounts (SQLAlchemy + Flask-Migrate will already be in place). The critical design insight from architecture research is that the projection source abstraction — returning `dict[str, float]` from either DB or CSV — keeps the optimizer completely isolated from where projections came from.
 
-The critical risk in this milestone is constraint correctness in the multi-lineup sequential loop. The optimizer already tracks used cards across lineups to prevent cross-contest card reuse. Lock constraints must interact correctly with this mechanism: a card-level lock can only apply once (the card is consumed after assignment), while a golfer-level lock means "any card for this player must appear somewhere." Getting this semantics distinction wrong produces silently wrong lineups. Pre-solve constraint validation (salary feasibility, collection limit checks, conflict detection between lock and exclude) must ship alongside the lock feature itself, not as a follow-up.
+The primary risks are operational, not architectural: the cron job must see the API key (which lives in a `.env` file, not in `~/.bashrc`), cron output must be explicitly redirected to a log file (no MTA on the VPS), the fetcher must never overwrite valid data on API failure (transactional replace pattern), and the DataGolf API response field names are not fully documented and require a discovery call before finalizing the Pydantic model and DB schema. All of these are avoidable with deliberate setup steps in Phase 1.
 
 ---
 
@@ -19,147 +19,136 @@ The critical risk in this milestone is constraint correctness in the multi-lineu
 
 ### Recommended Stack
 
-No new dependencies are required for this milestone. The existing Flask 3.x, PuLP 2.x, Jinja2, and Pydantic v2 stack handles all three feature areas without addition. Flask's built-in signed-cookie session stores the lock/exclude identifier sets (worst-case ~600 bytes, well within the 4KB limit). PuLP's `+=` constraint API natively supports the two lock patterns needed. HTML checkboxes plus standard form POST replaces any need for HTMX or JavaScript frameworks.
-
-The one candidate addition — `flask-session` with filesystem backend — was researched and explicitly rejected. The locked card identifier payload fits in a cookie. Storing full `Card` dataclass objects in session is the only scenario that would require server-side session storage, and that is an anti-pattern (dataclasses are not JSON-serializable).
+The v1.2 additions are minimal and targeted. The existing stack (Flask 3.x, PuLP/CBC, Pydantic v2, Gunicorn + Nginx + systemd) is unchanged. New dependencies are `httpx>=0.28` for the single DataGolf API call, `psycopg[binary]>=3.2` as the PostgreSQL driver (psycopg 3 is the modern successor to psycopg2, with bundled libpq so no system library install is needed), `SQLAlchemy>=2.0` + `Flask-SQLAlchemy>=3.1` for connection lifecycle and future Alembic migrations, `Flask-Migrate>=4.1` for schema migration support (critical for the v1.3 user accounts milestone), and `python-dotenv>=1.0` to load `DATAGOLF_API_KEY` and `DATABASE_URL`. Scheduling is handled entirely by the existing systemd/cron infrastructure — no APScheduler, no Celery, no Redis.
 
 **Core technologies:**
-- **Flask built-in session**: Store lock/exclude identifiers — fits in cookie, zero new config
-- **PuLP `+=` constraint API**: Inject `x[i] == 1` (card lock) and `lpSum >= 1` (golfer lock) before `solve()`
-- **Jinja2 + HTML checkboxes**: Per-card toggle controls via standard form POST — no JS needed
-- **Hidden form field (JSON)**: Carry serialized `valid_cards` between requests without re-upload or server storage
+- `httpx>=0.28`: HTTP client for DataGolf API — built-in timeout as first-class param, connection pooling, no external C deps; preferred over `requests` for cron context
+- `psycopg[binary]>=3.2`: PostgreSQL driver — bundles libpq, active development (psycopg2 is maintenance-only), 4-5x more memory efficient, works as SQLAlchemy 2.0 dialect via `postgresql+psycopg://`
+- `SQLAlchemy>=2.0` + `Flask-SQLAlchemy>=3.1`: ORM/Core + connection management — `db.init_app(app)` handles pool lifecycle with Gunicorn workers; Core queries (`text()`) keep things simple for one table
+- `Flask-Migrate>=4.1`: Schema migration tooling — wraps Alembic with Flask CLI commands; auto-detects column changes since v4.0; essential bridge to v1.3 user accounts
+- `python-dotenv>=1.0`: Secrets management — loads `.env` file for API key and `DATABASE_URL`; Flask auto-loads `.env` when installed; single file to manage on the VPS
+- `systemd timer` (OS-level): Scheduler — zero new dependencies; runs Tue/Wed mornings; logs via journalctl; no Python process must stay alive between runs
 
-See `.planning/research/STACK.md` for full rationale, rejected alternatives, and session size calculations.
+**Version compatibility note:** `Flask-SQLAlchemy>=3.1` requires `SQLAlchemy>=2.0`. The SQLAlchemy connection string must use `postgresql+psycopg://` (not `psycopg2`).
 
 ### Expected Features
 
-All research into mainstream DFS optimizers (FantasyPros, Footballguys, Daily Fantasy Fuel, SaberSim, FTN Fantasy) confirms that lock/exclude is table stakes — a feature users expect without being asked. Every major tool implements it the same way: lock forces 100% exposure in all lineups, exclude removes from the eligible pool entirely, state persists within a session and resets on new upload.
+The v1.2 feature set is clean and well-bounded. Research confirms the DataGolf `fantasy-projection-defaults` endpoint returns current-week projections for the PGA Tour, refreshed when tee times are released (typically Tuesday). The endpoint uses query-parameter authentication with a Scratch Plus subscription key. Rate limits (45 req/min) are irrelevant for a twice-weekly cron fetch.
 
-**Must have (v1.1 core, P1):**
-- Exclude a golfer by name — removes all their cards from pool before ILP (pre-filter, no constraint needed)
-- Exclude a specific card — removes that exact card from pool before ILP (pre-filter)
-- Lock a specific card — force this card into one lineup via `x[i] == 1` equality constraint
-- Lock a golfer by name — require at least one of their cards via `lpSum >= 1` constraint
-- Session-scoped state — lock/exclude resets on new CSV upload, persists across re-optimize calls
-- Player pool table with lock/exclude controls — cards must be visible before users can act on them
-- Visual confirmation in lineup output — locked cards marked so users can confirm constraints took effect
+**Must have (table stakes — v1.2 launch):**
+- DataGolf API fetcher (PROJ-01) — HTTP GET `fantasy-projection-defaults`, parse response, handle errors; core purpose of v1.2
+- PostgreSQL projection storage (PROJ-03) — `projections` table with `dg_id`, `player_name`, `projected_score`, `event_name`, `fetched_at`; designed for v1.3 compatibility (no `user_id` needed on this table)
+- Cron scheduler (PROJ-02) — systemd timer or crontab Tue/Wed mornings; invokes `flask fetch-projections` CLI command
+- Projection source selector (PROJ-04) — radio button on existing upload page; "DataGolf (from DB)" or "Upload CSV"
+- Stale data indicator (PROJ-05) — tournament name + relative age label; prevents user confusion with off-week data
+- Player name normalization (DataGolf "Last, First" to GameBlazers "First Last") — extend existing `normalize_name()` pipeline with a `parse_datagolf_name()` step
 
-**Should have (P2, add after core works):**
-- "Clear all" button — clears lock/exclude state without re-uploading
-- Lock/exclude state summary — shows "3 cards locked, 2 golfers excluded" above the Optimize button
-- Card-vs-card comparison view — side-by-side for same golfer with different multipliers
-- Lineup export — copy to clipboard or download as CSV
+**Should have (competitive — v1.2.x after validation):**
+- Manual "Refresh Projections" button — triggers fetcher on demand from the UI; useful before Tuesday cron runs
+- Fetch status dashboard — last fetch time, player count, error log; builds user confidence in automation
+- Unmatched player report for DataGolf source — reuses existing `projection_warnings` pattern
 
-**Defer to v1.2+:**
-- Exposure limits (ADV-01) — cap how often a single golfer appears across all lineups
-- Diversity constraints (ADV-02) — enforce minimum player differences between lineups
-- Sensitivity analysis (ADV-03) — show how lineup changes if a projection shifts
-- Contest configuration editor in web UI
+**Defer (v1.3+):**
+- Multi-source projection averaging — explicitly scoped to v2.0; requires multiple API integrations and weighting logic
+- Projection comparison view (DataGolf vs CSV side-by-side) — nice-to-have; not needed for core workflow
+- DataGolf player ID cross-reference table — name normalization is sufficient for 95%+ of players at v1.2 scale
 
-See `.planning/research/FEATURES.md` for the full prioritization matrix, competitor analysis, and feature dependency graph.
+**Anti-features confirmed:** Do not use DraftKings salary data from DataGolf (GameBlazers has its own salary system), do not store historical projection snapshots (only latest per event), and do not attempt fuzzy player name matching (golf has too many similar names; exact normalized match + explicit alias table is the correct approach).
 
 ### Architecture Approach
 
-The v1.0 architecture is a single-route, single-template, stateless request-response loop. v1.1 extends this with one new route (`POST /reoptimize`) and one new data structure (`LockExcludeSpec`). The card data problem — files are temp files deleted after the first request — is solved by serializing `valid_cards` to JSON in a hidden form field on the results page. The `reoptimize` route deserializes these cards, parses the lock/exclude form fields into a `LockExcludeSpec`, and calls an extended `optimize()` function. A stable card key `(player, salary, multiplier, collection)` replaces the Python `id()` approach used in v1.0 for cross-lineup tracking, which breaks across serialization boundaries.
+The v1.2 architecture adds a new background path (cron fetcher) and a DB read path to the existing stateless web request cycle, while keeping the optimizer completely isolated. The key isolation property: `gbgolf/optimizer/` receives `list[Card]` with `projected_score` already set and has zero knowledge of whether those projections came from the DB or a CSV upload. All DB integration is contained within three new/modified files: `gbgolf/db.py`, `gbgolf/fetch.py`, and `gbgolf/data/projections.py`. The existing route gains a single `if/else` branch on `projection_source` form field value.
 
-**Major components (new or modified):**
-1. **`Card.card_key` property** — stable composite identity for lock/exclude tracking and serialization; replaces `id()` across requests
-2. **`LockExcludeSpec` dataclass** — carries `lock_cards`, `lock_players`, `exclude_cards`, `exclude_players` into the optimizer with a `validate()` method for conflict detection
-3. **`cards_to_json()` / `cards_from_json()`** — serialization helpers for the hidden form field transport
-4. **`POST /reoptimize` route** — new route in `routes.py`; deserializes cards, applies spec, re-runs optimizer, re-renders results
-5. **Extended `optimize()` and `_solve_one_lineup()`** — accept `LockExcludeSpec`, apply lock constraints before `solve()`, pre-filter excludes before ILP construction
-6. **Lock/exclude panel in `index.html`** — checkboxes per card row, hidden `cards_json` field, Re-Optimize button
+**Major components:**
+1. `gbgolf/db.py` (NEW) — Flask-SQLAlchemy init, engine config (`pool_size=2`, `max_overflow=3`, `pool_pre_ping=True`, `pool_recycle=1800`); registered in `create_app()` via `db.init_app(app)`
+2. `gbgolf/fetch.py` (NEW) — DataGolf HTTP client + Flask CLI command (`flask fetch-projections`); invoked by cron; shares app config via Flask app context; uses transactional upsert (`INSERT ON CONFLICT`) keyed on `(dg_id, fetched_at::date)`
+3. `gbgolf/data/projections.py` (MODIFIED) — gains `load_projections_from_db()` returning `dict[str, float]` — same interface as the existing CSV parser, so the optimizer is unaffected
+4. `gbgolf/web/routes.py` (MODIFIED) — `POST /` branches on `projection_source` form field; calls DB or CSV path accordingly; passes `fetch_metadata` to template for staleness display
+5. PostgreSQL `projections` table — single table, flat rows (no normalization), designed with v1.3 expansion in mind
+6. systemd timer / crontab — runs `flask fetch-projections` Tue/Wed 7am (UTC-adjusted); redirects output to `/var/log/datagolf-fetch.log`
 
-See `.planning/research/ARCHITECTURE.md` for the full data flow diagrams, component boundary tables, and the five architectural anti-patterns to avoid.
+**Build order:** DB foundation first (fetcher writes to it), fetcher second (UI reads from it), source selector + staleness display third, deploy + verify fourth. This respects all dependency chains.
 
 ### Critical Pitfalls
 
-The full pitfall catalog is in `.planning/research/PITFALLS.md`. The five most dangerous:
+1. **Cron cannot see the API key** — Cron spawns a minimal shell that does NOT inherit `~/.bashrc` or systemd `Environment=` directives. Store the key in `/opt/GBGolfOptimizer/.env` with `export DATAGOLF_API_KEY=...` and source it in the crontab entry: `. /opt/GBGolfOptimizer/.env && flask fetch-projections`. Verify by running the cron job via cron (not manually from SSH) and checking the log file.
 
-1. **Lock constraint leaking across the multi-lineup sequential loop** — Card-level locks can only apply once (card is consumed after assignment). Golfer-level locks may become infeasible in lineup 2 if the golfer has only one card. Distinguish these semantically before writing any ILP code; surface per-lineup lock resolution in the UI. Recovery is HIGH cost if deferred.
+2. **Fetcher overwrites good data when DataGolf API fails** — A "DELETE then INSERT" pattern leaves the table empty if the API returns an error or empty response. Use a transactional replace: validate the response first (minimum 20 players for a real field), then wrap `DELETE + INSERT` in a single transaction with automatic rollback on failure. Never delete existing data before confirming valid new data exists.
 
-2. **Infeasibility with no useful error message** — When locked cards push salary over cap or exceed collection limits, the solver returns non-Optimal with no guidance. Pre-solve diagnostics (salary sum check, collection limit check, roster size check) must ship with the lock feature — never separately. O(n) Python checks, microsecond cost.
+3. **PostgreSQL connection pool shared across Gunicorn forked workers** — If the engine is created before Gunicorn forks, workers share TCP connections and corrupt each other's query streams. The current `gbgolf.service` does NOT use `--preload`, so each worker calls `create_app()` independently and gets its own pool. Keep `--preload` out of the Gunicorn config. Set `pool_pre_ping=True` to handle idle connection drops.
 
-3. **Conflicting lock + exclude constraints causing silent infeasibility** — User locks a card and excludes the same golfer. ILP receives `x[i] == 1` and `sum == 0` for the same variable, which is immediately infeasible. Add `validate()` to `LockExcludeSpec`; add conflict detection as a pre-flight check before any solve attempt; disable conflicting UI states in the template.
+4. **DataGolf API response field names are not fully documented** — The `fantasy-projection-defaults` endpoint documentation does not provide a complete JSON schema. The exact name for the projected points field (e.g., `proj_points`, `total_pts`, `projected_pts`) is unknown without a live API call. Build the Pydantic model with `model_config = ConfigDict(extra="allow")` initially, make a discovery call before the sprint begins, and document the exact field names before writing the DB schema.
 
-4. **Card vs. golfer exclude ambiguity causing wrong results** — "Exclude" meaning exclude-one-card versus exclude-all-cards-for-this-golfer are distinct and must be labeled explicitly in the UI. Store in two separate sets in `LockExcludeSpec`. Implementing only one level silently produces wrong lineups.
-
-5. **Stale locks after CSV re-upload due to `id()` usage** — Storing lock state by Python `id()` silently no-ops when new card objects are created on re-upload. Always use the stable composite key `(player, salary, multiplier, collection)`. Always clear lock/exclude state when a new upload succeeds and show a visible notice to the user.
+5. **Player name mismatches between DataGolf and GameBlazers** — DataGolf uses "Last, First" format and DraftKings name conventions; GameBlazers uses "First Last". After `parse_datagolf_name()` reordering and `normalize_name()` NFKD normalization, the vast majority of players match. Edge cases (suffixes like Jr./Sr., alternate transliterations like "Hoejgaard" vs "Hojgaard", nickname differences like "Ben An" vs "Byeong Hun An") require a small explicit alias table populated from the first week of live testing. Do not use fuzzy matching.
 
 ---
 
 ## Implications for Roadmap
 
-Based on combined research, a four-phase structure is recommended. All five critical pitfalls map to Phase 1 — they are architectural decisions that cannot be deferred without rework. The phases are strictly ordered by code dependency.
+Based on research, the dependency chain is clear: DB schema must exist before the fetcher can write, the fetcher must work before the UI can read from it, and the source selector must follow both. This maps to a 4-phase build.
 
-### Phase 1: Card Identity and Constraint Foundation
+### Phase 1: Database Foundation
 
-**Rationale:** The stable card key is a prerequisite for everything else. ILP constraint logic must be validated before UI is built around it — infeasibility behavior must be understood to design error messages. All five critical pitfalls require decisions made here (card vs. golfer semantics, conflict detection, pre-solve diagnostics, stable key scheme, session state reset on upload). Deferring any of these creates rework across all later phases.
+**Rationale:** All subsequent work depends on PostgreSQL being available and the Flask app connecting to it correctly. Connection pool configuration, `pg_hba.conf` auth, and the `.env` secrets file must be in place before the fetcher or UI work begins. This is also the phase where the most operationally dangerous pitfalls occur (wrong pool config, API key not visible to cron, secrets in version control).
 
-**Delivers:** A working optimizer that correctly applies lock and exclude constraints, handles infeasibility with useful per-constraint diagnostics, and resets state on new upload. Testable via unit tests without any UI.
+**Delivers:** Running PostgreSQL instance on VPS with `gbgolf` database and user; `gbgolf/db.py` with Flask-SQLAlchemy init registered in `create_app()`; `projections` table created via migration DDL; `DATABASE_URL` in `.env` (not committed to git); Flask app starts cleanly with DB connection.
 
-**Addresses features:** All four lock/exclude types (lock card, lock golfer, exclude card, exclude golfer); session-scoped state reset on upload; constraint validation pre-flight check.
+**Addresses:** PROJ-03 (PostgreSQL storage schema design)
 
-**Avoids:**
-- Pitfall 1 (lock leaking across sequential loop): Design card-lock vs. golfer-lock semantics before writing ILP code
-- Pitfall 2 (infeasibility with no useful error): Include salary/collection pre-solve diagnostics alongside constraint injection
-- Pitfall 3 (stale locks after re-upload): Use stable composite key from day one; clear state on new upload
-- Pitfall 4 (card vs. golfer exclude ambiguity): Separate `excluded_card_keys` and `excluded_players` into distinct sets
-- Pitfall 5 (conflicting lock + exclude): Add `validate()` to `LockExcludeSpec`; conflict detection as pre-flight check
+**Avoids:** Pitfall 3 (Gunicorn forked worker pool sharing), Pitfall 6 (API key in git history), PostgreSQL peer auth blocking app connection
 
-**Implementation order within phase:**
-1. Add `card_key` property to `Card` dataclass; update `optimize()` to use it instead of `id()`
-2. Add `LockExcludeSpec` dataclass with `validate()` method
-3. Extend `_solve_one_lineup()` with `locked_indices` parameter and pre-solve diagnostics
-4. Extend `optimize()` with `spec: LockExcludeSpec | None = None`
-5. Add session reset on new CSV upload in `routes.py`
+**Research flag:** Standard patterns — PostgreSQL + Flask-SQLAlchemy setup is well-documented. Skip `/gsd:research-phase`.
 
-### Phase 2: Serialization and Re-Optimize Route
+### Phase 2: DataGolf API Fetcher + Cron
 
-**Rationale:** Once the optimizer correctly handles lock/exclude specs, the transport layer (serialization + new route) is straightforward. Serialization is a prerequisite for the route; the route is a prerequisite for the UI.
+**Rationale:** The fetcher depends on the DB (Phase 1) being ready. This phase has the highest density of gotchas: API key visibility to cron, silent cron failures with no log output, transactional data replacement, and the API response field name discovery. All must be solved before the UI work (Phase 3) begins, or the UI will be built against an untested data pipeline.
 
-**Delivers:** A working `POST /reoptimize` endpoint that accepts hidden card JSON plus form-posted lock/exclude fields, runs the optimizer, and returns results. End-to-end flow testable without a polished UI.
+**Delivers:** `gbgolf/fetch.py` with `flask fetch-projections` CLI command; cron entry on VPS with log redirection; first successful automated fetch verified via log file; upsert logic confirmed idempotent; API response field names documented and Pydantic model finalized.
 
-**Uses:** Flask hidden form field pattern (no new dependencies); `cards_to_json()` / `cards_from_json()` helpers; existing `render_template` pattern from `routes.py`.
+**Addresses:** PROJ-01 (DataGolf API fetcher), PROJ-02 (cron scheduler)
 
-**Implements:** `POST /reoptimize` route in `routes.py`; serialization helpers in `models.py`.
+**Avoids:** Pitfall 1 (API key invisible to cron), Pitfall 2 (silent cron failures), Pitfall 7 (fetcher overwrites good data on API failure)
 
-**Avoids:** Storing full `Card` objects in session (anti-pattern per ARCHITECTURE.md); using Python `id()` in serialized data (breaks across requests).
+**Research flag:** The API response field names require a live discovery call before implementation. This is a known gap — not a research-phase issue, but an implementation prerequisite. Do the discovery call at the start of this phase.
 
-### Phase 3: Template UI and Lock/Exclude Panel
+### Phase 3: Projection Source Selector + Staleness Display
 
-**Rationale:** Pure presentation layer. All logic is validated; UI is wiring. Last in the core build because template work is fastest to iterate when the backend contract is stable.
+**Rationale:** Depends on Phase 1 (DB) and Phase 2 (data in DB). This is the user-facing deliverable — the UI change that makes v1.2 visible to the user. The `validate_pipeline()` refactor (splitting roster validation from projection merging) is the main structural code change; it should be done cleanly to preserve testability.
 
-**Delivers:** Player pool table with per-card lock/exclude checkboxes, hidden `cards_json` field, Re-Optimize button, visual markers on locked cards in lineup output, and lock/exclude state that re-renders correctly after re-optimize.
+**Delivers:** `load_projections_from_db()` in `gbgolf/data/projections.py` returning `dict[str, float]`; refactored `validate_pipeline()` that accepts projection dict directly (not just file path); source selector radio buttons on `index.html`; staleness label showing tournament name and relative age; player name alias table populated from first live test.
 
-**Implements:** Architecture component "Lock/exclude panel in `index.html`"; hidden field; Re-Optimize form; loading overlay applied to `/reoptimize` form submit.
+**Addresses:** PROJ-04 (source selector), PROJ-05 (stale data display), player name normalization
 
-**Avoids:** Full-page scroll loss (accepted as MVP behavior per research; HTMX upgrade deferred).
+**Avoids:** Pitfall 4 (player name mismatches), Pitfall 5 (wrong staleness labeling for off-week data), UX pitfalls (no tournament name shown, source resets on reload)
 
-### Phase 4: P2 Polish Features
+**Research flag:** Player name normalization edge cases are partially known but require live testing. Populate the alias table during this phase after running DataGolf projections against a real GameBlazers roster export.
 
-**Rationale:** "Clear all" button, lock/exclude state summary, card-vs-card comparison, and lineup export are all low-complexity additions that require the Phase 3 UI to exist first but add no architectural risk. These can be done in any order.
+### Phase 4: Deploy + Verification
 
-**Delivers:** Improved UX for weekly use; surfaces card comparison data that is unique to GameBlazers' multi-card system; reduces re-entry friction via export.
+**Rationale:** Integration testing in the deployed environment catches the pitfalls that only surface under production conditions: cron actually running on the VPS (not just working manually from SSH), Gunicorn workers connecting to PostgreSQL without pool issues, log rotation working, and the staleness display showing correct labels for both current-week and stale data states.
 
-**Addresses features:** "Clear all" button; lock/exclude state summary; card-vs-card comparison (USBL-02); lineup export (USBL-04).
+**Delivers:** Cron running and verified on VPS; both projection sources working end-to-end in the deployed app; stale data label verified; fetch log confirmed populating correctly; `pg_stat_activity` verified showing bounded connection count.
+
+**Addresses:** All operational pitfalls from the "Looks Done But Isn't" checklist in PITFALLS.md
+
+**Research flag:** Standard verification work. No research needed.
 
 ### Phase Ordering Rationale
 
-- Phases 1 through 3 are strictly ordered by code dependency: stable key → constraint logic → serialization → route → UI. No phase can be reordered without breaking the next.
-- All five critical pitfalls require Phase 1 decisions. Deferring any of them creates rework in the ILP layer, the UI layer, and the state management layer simultaneously.
-- Phase 4 polish features are independent of each other and can be done in any order or in parallel once Phase 3 is complete.
-- ADV-01 (exposure limits) and ADV-02 (diversity constraints) are explicitly deferred to v1.2+ — they add significant ILP formulation complexity and are not required for the lock/exclude use case validated in v1.1.
+- DB before fetcher: the fetcher's `INSERT` needs a table to write to, and the `DATABASE_URL` and pool configuration must be tested before any code depends on it.
+- Fetcher before UI: the source selector needs real data in the DB to be meaningful; building the UI before the fetcher works means testing against empty tables, which masks important staleness and no-data-available states.
+- Source selector before deploy verification: the full user-facing flow must be assembled before end-to-end verification makes sense.
+- This order also front-loads the highest-risk pitfalls (cron environment, connection pooling, transactional data safety) into Phases 1 and 2, so Phases 3 and 4 are lower-risk by design.
 
 ### Research Flags
 
-Phases with well-documented patterns (skip additional research):
-- **Phase 2 (Serialization/Route):** Standard Flask route + JSON serialization; no unknowns beyond what is in ARCHITECTURE.md.
-- **Phase 3 (Template UI):** Standard Jinja2/HTML form patterns; existing `index.html` is the guide.
-- **Phase 4 (Polish):** All P2 features are low-complexity additions with established patterns.
+Phases needing deeper research during planning:
+- **Phase 2 (Fetcher):** DataGolf API response field names are the only unresolved technical gap. Not a research-phase issue — handle with a discovery API call at phase start before writing any code. The exact JSON structure for `fantasy-projection-defaults` must be logged and documented before finalizing the Pydantic model and DB schema.
 
-Phases that should use the PITFALLS.md checklist as a test plan (no external research needed):
-- **Phase 1 (ILP Constraint Foundation):** The multi-lineup sequential loop interaction with lock constraints is the highest-risk area. The "Looks Done But Isn't" checklist in PITFALLS.md should be used as the acceptance test plan for this phase before proceeding to Phase 2. All answers are in the existing codebase and PITFALLS.md — no external research needed.
+Phases with standard patterns (skip research-phase):
+- **Phase 1 (DB Foundation):** Flask-SQLAlchemy + PostgreSQL setup is thoroughly documented with official sources. Connection pool configuration values are well-established.
+- **Phase 3 (Source Selector):** The branching architecture and `validate_pipeline()` refactor follow clear Flask patterns. The name normalization approach is an extension of existing code.
+- **Phase 4 (Deploy + Verify):** Standard verification checklist from PITFALLS.md. No novel territory.
 
 ---
 
@@ -167,47 +156,54 @@ Phases that should use the PITFALLS.md checklist as a test plan (no external res
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Based on direct codebase inspection plus verified Flask/PuLP documentation. No new dependencies means no unknown API surfaces. |
-| Features | HIGH | Lock/exclude behavior verified across FantasyPros, Footballguys, Daily Fantasy Fuel, SaberSim, FTN Fantasy. GameBlazers-specific card distinctions derived from PROJECT.md (first-party). |
-| Architecture | HIGH | Based on direct codebase inspection of `engine.py`, `__init__.py`, `routes.py`, `models.py`, `index.html`. Hidden-field serialization is a standard, well-understood web pattern. |
-| Pitfalls | HIGH | All five critical pitfalls are grounded in existing codebase analysis, ILP constraint theory, and verified DFS optimizer community patterns. Recovery costs are explicitly rated. |
+| Stack | HIGH | All libraries verified against PyPI and official docs. Version compatibility matrix confirmed. psycopg 3 and Flask-SQLAlchemy 3.1 both actively maintained as of March 2026. |
+| Features | HIGH for API structure and integration patterns; MEDIUM for exact API response fields | DataGolf endpoint parameters, auth method, and rate limits confirmed from official docs. Fantasy-projection-defaults response field names extrapolated from historical endpoint sample — requires live API call to confirm. |
+| Architecture | HIGH | Based on direct codebase inspection plus official Flask, SQLAlchemy, and Gunicorn docs. Component boundaries and data flow are clear. |
+| Pitfalls | HIGH for cron/DB/security pitfalls; MEDIUM for DataGolf-specific behavior | Cron environment, connection pooling, and secrets management pitfalls are universally documented failure modes. DataGolf off-week API behavior and exact response schema are unverified and require empirical testing. |
 
-**Overall confidence:** HIGH
-
-The unusually high confidence across all areas reflects that this is a subsequent milestone on an existing, inspected codebase rather than greenfield research. The domain (ILP lock/exclude for DFS) is well-documented. The only genuine unknowns are UX edge cases (scroll position loss on full-page reload; per-lineup lock resolution display format), both of which are explicitly deferred or accepted as MVP behavior.
+**Overall confidence:** HIGH — with one known gap that must be resolved at implementation start.
 
 ### Gaps to Address
 
-- **Per-lineup lock resolution display format**: The architecture describes showing "Card locked in lineup 1; not available for lineup 2" but does not specify the exact UI treatment (inline notice vs. tooltip vs. separate section). Decide during Phase 3 template work.
-- **Card-vs-card comparison layout**: The P2 feature is identified as valuable but the display format (side-by-side table, inline in card pool, or separate section) is not specified. Design during Phase 4.
-- **"Clear all" scope**: Should "Clear all" clear only locks, only excludes, or both? Industry standard is both. Confirm during Phase 4 planning.
+- **DataGolf API response field names:** The exact JSON field name for the projected fantasy points value is unconfirmed. During Phase 2, make one live API call before writing any parsing code, log the full raw response, and update the Pydantic model and DB schema accordingly. The `projected_score` column name in the schema is a placeholder until the actual field name is confirmed.
+
+- **DataGolf off-week API behavior:** What the `fantasy-projection-defaults` endpoint returns when no PGA Tour event is active (200 + empty array? 404? 200 + last week's stale data?) has no documented behavior. The fetcher's guard logic (minimum player count threshold, don't overwrite on empty response) handles the likely cases, but this must be tested empirically — ideally by checking the API on a Monday before projections drop or during an off-week.
+
+- **GameBlazers player name format edge cases:** The alias table for players whose names differ between DataGolf and GameBlazers (e.g., "Ben An" vs "Byeong Hun An", suffix variations) can only be populated by running real DataGolf data against a real GameBlazers roster export. Plan for 1-2 rounds of alias table updates in the first week of production use.
+
+- **PostgreSQL `pg_hba.conf` auth mode on production VPS:** Ubuntu 24.04 defaults to `peer` authentication for local connections, which blocks password-based app connections. Changing the `pg_hba.conf` entry for the `gbgolf` user to `scram-sha-256` (or `md5`) is a required setup step. This is documented in PITFALLS.md but must be executed during Phase 1 deployment.
 
 ---
 
 ## Sources
 
 ### Primary (HIGH confidence)
-
-- Existing codebase: `gbgolf/optimizer/engine.py`, `gbgolf/optimizer/__init__.py`, `gbgolf/web/routes.py`, `gbgolf/data/models.py`, `gbgolf/data/filters.py`, `gbgolf/web/templates/index.html` — constraint integration design, session state reset point, Card field structure, `id()` usage patterns
-- PuLP technical documentation (coin-or.github.io/pulp) — `+=` constraint API, binary variable patterns, `LpStatus` values
-- FantasyPros DFS Optimizer support documentation — lock/exclude UX behavior (verified via web search 2026-03-14)
-- Footballguys DFS Multi Lineup Optimizer Quick Start Guide — lock/exclude behavior, exposure percentage (verified via web search 2026-03-14)
+- [DataGolf API Access Documentation](https://datagolf.com/api-access) — endpoint parameters, authentication method, rate limits
+- [DataGolf Raw Data Notes](https://datagolf.com/raw-data-notes) — field naming conventions, player_name format warning, event_id behavior
+- [DataGolf Historical DFS Sample (JSON)](https://feeds.datagolf.com/historical-dfs-data/sample?site=draftkings&file_format=json) — verified response structure with actual field names
+- [DataGolf Forum - PSA: API Rate Limits](https://forum.datagolf.com/t/psa-api-rate-limits/2511) — 45 req/min, 5-minute suspension enforcement
+- [psycopg PyPI](https://pypi.org/project/psycopg/) — v3.3.3, Feb 2026; confirmed active maintenance
+- [httpx PyPI](https://pypi.org/project/httpx/) — v0.28.1 stable
+- [Flask-Migrate docs](https://flask-migrate.readthedocs.io/) — v4.1.0, Alembic wrapper with auto-compare_type
+- [Flask-SQLAlchemy PyPI](https://pypi.org/project/Flask-SQLAlchemy/) — v3.1.1
+- [SQLAlchemy 2.0 Connection Pooling docs](https://docs.sqlalchemy.org/en/20/core/pooling.html) — pool_pre_ping, pool_size, forking behavior
+- [Flask CLI Commands](https://flask.palletsprojects.com/en/stable/cli/) — official Flask docs for CLI command pattern
+- [Crontab environment variables](https://cronitor.io/guides/cron-environment-variables) — cron minimal shell, no ~/.bashrc inheritance
+- [Install and configure PostgreSQL on Ubuntu](https://documentation.ubuntu.com/server/how-to/databases/install-postgresql/) — default peer auth, pg_hba.conf
+- Existing codebase: `gbgolf/data/matching.py`, `gbgolf/web/__init__.py`, `deploy/gbgolf.service` — confirmed no --preload, no DB engine, normalize_name() exists
 
 ### Secondary (MEDIUM confidence)
+- [Tiger Data psycopg benchmark](https://www.tigerdata.com/blog/psycopg2-vs-psycopg3-performance-benchmark) — psycopg 3 memory efficiency figures
+- [SQLAlchemy connection pool within multiple threads and processes](https://davidcaron.dev/sqlalchemy-multiple-threads-and-processes/) — practical Gunicorn + SQLAlchemy fork safety patterns
+- [Scheduling comparison: cron vs APScheduler vs Celery](https://leapcell.io/blog/scheduling-tasks-in-python-apscheduler-vs-celery-beat) — scheduler trade-off analysis
+- [Flask Cron Jobs Architecture](https://blog.miguelgrinberg.com/post/run-your-flask-regularly-scheduled-jobs-with-cron) — Flask CLI command as cron target pattern
+- [DataGolf FAQ](https://datagolf.com/frequently-asked-questions) — projection release timing (Monday/Tuesday before Thursday events)
 
-- Flask Sessions — TestDriven.io — 4KB cookie limit, JSON serialization requirement, server-side session use cases
-- Flask-Session 0.8.0 documentation — version confirmed, filesystem interface deprecated in 0.7.0
-- Daily Fantasy Fuel PGA optimizer — lock/exclude feature patterns (web search 2026-03-14)
-- SaberSim golf optimizer — lock/exclude feature patterns (web search 2026-03-14)
-- FTN Fantasy PGA optimizer — lock/exclude feature patterns (web search 2026-03-14)
-- RotoWire NFL DFS Optimizer FAQ, Fantasy Footballers — over-locked infeasibility patterns
-- GitHub coin-or/pulp — current PuLP development status and CBC constraint handling
-
-### Tertiary (LOW confidence)
-
-- DFS community documentation on over-lock infeasibility — multiple sources agree, elevating to MEDIUM in aggregate; listed here for transparency about source type
+### Tertiary (LOW confidence — needs live verification)
+- DataGolf `fantasy-projection-defaults` exact JSON response schema — field name for projected points is unconfirmed; requires live API call
+- DataGolf off-week API behavior — no documentation; must be tested empirically
+- GameBlazers player name format for edge cases — no public documentation; requires comparison against actual roster export
 
 ---
-
-*Research completed: 2026-03-14*
+*Research completed: 2026-03-25*
 *Ready for roadmap: yes*
