@@ -33,12 +33,30 @@
     <summary>{% if show_results %}Change Files{% else %}Upload Files{% endif %}</summary>
     <form method="post" action="{{ url_for('main.index') }}" enctype="multipart/form-data" id="upload-form">
       <div class="form-row">
-        <label for="roster">Roster CSV</label>
-        <input type="file" id="roster" name="roster" accept=".csv" required />
+        <span class="form-row-heading">Roster CSV</span>
+        <label class="file-upload-zone">
+          <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <span class="upload-hint">Click to select a CSV file</span>
+          <span class="upload-filename" id="roster-filename"></span>
+          <input type="file" id="roster" name="roster" accept=".csv" required />
+        </label>
       </div>
       <div class="form-row">
-        <label for="projections">Projections CSV</label>
-        <input type="file" id="projections" name="projections" accept=".csv" required />
+        <span class="form-row-heading">Projections CSV</span>
+        <label class="file-upload-zone">
+          <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <span class="upload-hint">Click to select a CSV file</span>
+          <span class="upload-filename" id="projections-filename"></span>
+          <input type="file" id="projections" name="projections" accept=".csv" required />
+        </label>
       </div>
       <button type="submit">Generate Lineups</button>
     </form>
@@ -57,7 +75,7 @@
       <h2>Unmatched Players</h2>
       <ul>
         {% for excl in validation.excluded %}
-        <li>{{ excl.player }} &mdash; {{ excl.reason }}</li>
+        <li>{{ excl.player }} <span class="excl-reason">&mdash; {{ excl.reason }}</span></li>
         {% endfor %}
       </ul>
     </section>
@@ -362,6 +380,25 @@
   });
   updateConstraintCount();
   updateSortIndicators(3, true);
+
+  // File upload zones: show selected filename inside zone
+  document.querySelectorAll('.file-upload-zone').forEach(function(zone) {
+    var input = zone.querySelector('input[type="file"]');
+    if (!input) return;
+    input.addEventListener('change', function() {
+      var nameEl = zone.querySelector('.upload-filename');
+      var hintEl = zone.querySelector('.upload-hint');
+      if (input.files && input.files[0]) {
+        nameEl.textContent = input.files[0].name;
+        nameEl.style.display = 'block';
+        hintEl.style.display = 'none';
+      } else {
+        nameEl.textContent = '';
+        nameEl.style.display = 'none';
+        hintEl.style.display = 'block';
+      }
+    });
+  });
 </script>
 
 </body>

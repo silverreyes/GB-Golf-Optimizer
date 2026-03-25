@@ -59,7 +59,7 @@ header {
   background-color: #1a1010;
   background-size: cover;
   background-position: center 45%;
-  filter: brightness(0.42) saturate(0.65);
+  filter: brightness(0.78) saturate(0.85);
 }
 
 .hero-overlay {
@@ -67,9 +67,9 @@ header {
   inset: 0;
   background: linear-gradient(
     135deg,
-    rgba(13, 13, 14, 0.97) 0%,
-    rgba(13, 13, 14, 0.78) 40%,
-    rgba(13, 13, 14, 0.40) 100%
+    rgba(13, 13, 14, 0.65) 0%,
+    rgba(13, 13, 14, 0.42) 42%,
+    rgba(13, 13, 14, 0.12) 100%
   );
 }
 
@@ -108,6 +108,7 @@ header::after {
   letter-spacing: 0.01em;
   line-height: 1;
   text-transform: uppercase;
+  text-shadow: 0 2px 20px rgba(0,0,0,0.9), 0 1px 6px rgba(0,0,0,0.95);
 }
 
 .hero-subtitle {
@@ -151,6 +152,7 @@ main {
 #exclusion-report {
   background: var(--surface);
   border: 1px solid var(--border);
+  border-left: 3px solid var(--gold);
   border-radius: var(--radius);
   box-shadow: var(--shadow-md);
   overflow: hidden;
@@ -167,16 +169,27 @@ main {
   background: var(--surface-2);
   color: var(--text-muted);
   border-bottom: 1px solid var(--border);
-  border-left: 3px solid var(--accent);
 }
 
 #exclusion-report ul {
   margin: 0;
-  padding: 0.85rem 1.25rem 1rem 1.5rem;
+  padding: 0.85rem 1.25rem 1rem 1.75rem;
   font-family: var(--font-mono);
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  line-height: 1.9;
+  font-size: 0.85rem;
+  color: #dcdcdc;
+  line-height: 1.6;
+}
+
+#exclusion-report ul li {
+  margin-bottom: 0.45rem;
+}
+
+#exclusion-report ul li:last-child {
+  margin-bottom: 0;
+}
+
+.excl-reason {
+  color: #888;
 }
 
 /* ── Upload section ──────────────────────────────────────── */
@@ -237,7 +250,7 @@ main {
   margin-top: 1rem;
 }
 
-.form-row label {
+.form-row-heading {
   font-family: var(--font-mono);
   font-size: 0.62rem;
   font-weight: 700;
@@ -245,13 +258,59 @@ main {
   text-transform: uppercase;
   color: var(--text-muted);
   margin-bottom: 0.4rem;
+  display: block;
 }
 
-input[type="file"] {
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
-  color: var(--text-muted);
+.file-upload-zone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  background: var(--surface-2);
+  border: 1.5px dashed var(--accent);
+  border-radius: var(--radius);
+  padding: 1.2rem 1rem;
   cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  text-align: center;
+}
+
+.file-upload-zone:hover {
+  border-color: var(--accent-hover);
+  background: rgba(244, 123, 61, 0.06);
+}
+
+.file-upload-zone input[type="file"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  clip: rect(0,0,0,0);
+}
+
+.upload-icon {
+  color: var(--accent);
+  opacity: 0.75;
+  width: 22px;
+  height: 22px;
+}
+
+.upload-hint {
+  font-family: var(--font-mono);
+  font-size: 0.70rem;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+}
+
+.upload-filename {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--accent);
+  display: none;
+  font-weight: 500;
 }
 
 /* ── Buttons ─────────────────────────────────────────────── */
@@ -453,10 +512,45 @@ tbody tr:last-child td {
 }
 
 input[type="checkbox"] {
-  accent-color: var(--accent);
-  width: 14px;
-  height: 14px;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 15px;
+  height: 15px;
+  border: 1.5px solid #484848;
+  border-radius: 3px;
+  background: var(--surface-3);
   cursor: pointer;
+  position: relative;
+  vertical-align: middle;
+  flex-shrink: 0;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+input[type="checkbox"]:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+input[type="checkbox"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 3.5px;
+  top: 0.5px;
+  width: 5px;
+  height: 9px;
+  border: 2px solid #fff;
+  border-top: none;
+  border-left: none;
+  transform: rotate(45deg);
+}
+
+input[type="checkbox"]:disabled {
+  opacity: 0.28;
+  cursor: not-allowed;
 }
 
 /* ── Constraint count ────────────────────────────────────── */
