@@ -150,31 +150,35 @@ def test_write_projections_replaces_stale(db_session):
     """Second call for same tournament deletes old rows via CASCADE, inserts new."""
     db_session.execute(text("PRAGMA foreign_keys = ON"))
     old_players = [{"player_name": "Old Player", "projected_score": 60.0}]
-    old_fid = write_projections(db_session, "Test Open", "pga", old_players)
+    write_projections(db_session, "Test Open", "pga", old_players)
+
+    # Verify old data exists
+    old_proj_name = db_session.execute(
+        text("SELECT player_name FROM projections")
+    ).scalar_one()
+    assert old_proj_name == "Old Player"
 
     new_players = [
         {"player_name": "New Player A", "projected_score": 70.0},
         {"player_name": "New Player B", "projected_score": 71.0},
     ]
-    new_fid = write_projections(db_session, "Test Open", "pga", new_players)
+    write_projections(db_session, "Test Open", "pga", new_players)
 
-    # Old fetch row should be gone
-    old_count = db_session.execute(
-        text("SELECT COUNT(*) FROM fetches WHERE id = :fid"), {"fid": old_fid}
+    # Only one fetch row should exist (old one replaced)
+    fetch_count = db_session.execute(
+        text("SELECT COUNT(*) FROM fetches WHERE tournament_name = 'Test Open'")
     ).scalar_one()
-    assert old_count == 0
+    assert fetch_count == 1
 
-    # Old projections should be gone (CASCADE)
-    old_proj = db_session.execute(
-        text("SELECT COUNT(*) FROM projections WHERE fetch_id = :fid"), {"fid": old_fid}
-    ).scalar_one()
-    assert old_proj == 0
-
-    # New data should exist
-    new_count = db_session.execute(
-        text("SELECT COUNT(*) FROM projections WHERE fetch_id = :fid"), {"fid": new_fid}
-    ).scalar_one()
-    assert new_count == 2
+    # Old projection ("Old Player") should be gone, replaced by new data
+    names = [
+        r["player_name"]
+        for r in db_session.execute(text("SELECT player_name FROM projections")).mappings().all()
+    ]
+    assert "Old Player" not in names
+    assert "New Player A" in names
+    assert "New Player B" in names
+    assert len(names) == 2
 
 
 def test_write_projections_idempotent(db_session):
