@@ -1,5 +1,8 @@
 import pytest
 
+from gbgolf.web import create_app
+from gbgolf.db import db as _db
+
 SAMPLE_ROSTER_CSV = """Player,Positions,Team,Multiplier,Overall,Franchise,Rookie,Tradeable,Salary,Collection,Status,Expires
 Scottie Scheffler,G,ATL,1.5,90,False,False,True,12000,Core,Active,2026-12-31
 Rory McIlroy,G,TOR,1.2,88,False,False,True,11000,Weekly Collection,Active,2026-06-30
@@ -65,3 +68,23 @@ def tmp_csv_file(tmp_path):
         p.write_text(content, encoding="utf-8")
         return str(p)
     return _write
+
+
+@pytest.fixture
+def app():
+    """Create app with in-memory SQLite for testing."""
+    app = create_app()
+    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+    app.config["TESTING"] = True
+    with app.app_context():
+        _db.create_all()
+        yield app
+        _db.drop_all()
+
+
+@pytest.fixture
+def db_session(app):
+    """Provide a transactional database session for tests."""
+    with app.app_context():
+        yield _db.session
+        _db.session.rollback()
