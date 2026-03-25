@@ -20,5 +20,8 @@ venv/
 *.swp
 *.swo
 
+# Flask instance folder
+instance/
+
 # Fetch logs
 logs/

@@ -9,12 +9,12 @@ Requirements for the Automated Projection Fetching milestone.
 
 ### Data Fetching & Storage (FETCH)
 
-- [ ] **FETCH-01**: System fetches player projections from the DataGolf `fantasy-projection-defaults` API (PGA Tour, DraftKings scoring, main slate) and writes them to a PostgreSQL database
+- [x] **FETCH-01**: System fetches player projections from the DataGolf `fantasy-projection-defaults` API (PGA Tour, DraftKings scoring, main slate) and writes them to a PostgreSQL database
 - [ ] **FETCH-02**: A cron job on the VPS triggers the fetcher automatically on Tuesday and Wednesday mornings
-- [ ] **FETCH-03**: Fetch activity (player count, tournament name, timestamp, any errors) is written to a log file on the VPS
-- [ ] **FETCH-04**: Existing stored projections are preserved if the API returns an error or fewer than a minimum viable player count
+- [x] **FETCH-03**: Fetch activity (player count, tournament name, timestamp, any errors) is written to a log file on the VPS
+- [x] **FETCH-04**: Existing stored projections are preserved if the API returns an error or fewer than a minimum viable player count
 - [x] **FETCH-05**: Fetched projections are stored with player name, projected score, tournament name, and fetch timestamp per record
-- [ ] **FETCH-06**: DataGolf player names ("Last, First" format) are normalized to "First Last" before storage to match GameBlazers roster names
+- [x] **FETCH-06**: DataGolf player names ("Last, First" format) are normalized to "First Last" before storage to match GameBlazers roster names
 
 ### Projection Source (SRC)
 
@@ -92,12 +92,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FETCH-01 | Phase 9 | Pending |
+| FETCH-01 | Phase 9 | Complete |
 | FETCH-02 | Phase 9 | Pending |
-| FETCH-03 | Phase 9 | Pending |
-| FETCH-04 | Phase 9 | Pending |
+| FETCH-03 | Phase 9 | Complete |
+| FETCH-04 | Phase 9 | Complete |
 | FETCH-05 | Phase 8 | Complete |
-| FETCH-06 | Phase 9 | Pending |
+| FETCH-06 | Phase 9 | Complete |
 | SRC-01 | Phase 10 | Pending |
 | SRC-02 | Phase 10 | Pending |
 | SRC-03 | Phase 10 | Pending |
