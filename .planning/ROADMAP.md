@@ -2,13 +2,14 @@
 
 ## Milestones
 
-- ✅ **v1.0 MVP** — Phases 1–3 (shipped 2026-03-13)
-- 🚧 **v1.1 Manual Lock/Exclude** — Phases 4–7 (in progress)
+- ✅ **v1.0 MVP** — Phases 1-3 (shipped 2026-03-13)
+- ✅ **v1.1 Manual Lock/Exclude** — Phases 4-7 (shipped 2026-03-25)
+- 🚧 **v1.2 Automated Projection Fetching** — Phases 8-11 (in progress)
 
 ## Phases
 
 <details>
-<summary>✅ v1.0 MVP (Phases 1–3) — SHIPPED 2026-03-13</summary>
+<summary>v1.0 MVP (Phases 1-3) — SHIPPED 2026-03-13</summary>
 
 - [x] Phase 1: Data Foundation (4/4 plans) — completed 2026-03-13
 - [x] Phase 2: Optimization Engine (3/3 plans) — completed 2026-03-13
@@ -18,78 +19,78 @@ See: `.planning/milestones/v1.0-ROADMAP.md` for full phase details.
 
 </details>
 
-### 🚧 v1.1 Manual Lock/Exclude (In Progress)
+<details>
+<summary>v1.1 Manual Lock/Exclude (Phases 4-7) — SHIPPED 2026-03-25</summary>
 
-**Milestone Goal:** Users can force specific cards or golfers in or out of optimization after uploading CSVs, and re-optimize iteratively within a session without re-uploading files.
+- [x] Phase 4: Constraint Foundation (3/3 plans) — completed 2026-03-14
+- [x] Phase 5: Serialization and Re-Optimize Route (2/2 plans) — completed 2026-03-14
+- [x] Phase 6: Lock/Exclude UI (3/3 plans) — completed 2026-03-14
+- [x] Phase 7: Polish (2/2 plans) — completed 2026-03-14
 
-- [x] **Phase 4: Constraint Foundation** — Stable card identity, lock/exclude ILP constraints, pre-solve diagnostics, and session reset (completed 2026-03-14)
-- [x] **Phase 5: Serialization and Re-Optimize Route** — Card serialization helpers and POST /reoptimize endpoint (completed 2026-03-14)
-- [x] **Phase 6: Lock/Exclude UI** — Player pool table with per-card controls, Re-Optimize button, and locked card markers in output (completed 2026-03-14)
-- [x] **Phase 7: Polish** — Clear-all button and active lock/exclude count display (completed 2026-03-14)
+</details>
+
+### 🚧 v1.2 Automated Projection Fetching (In Progress)
+
+**Milestone Goal:** Automatically fetch DFS golf projections from the DataGolf API on a schedule and store them in PostgreSQL, letting users choose between DataGolf projections or a manually uploaded CSV before optimizing.
+
+- [ ] **Phase 8: Database Foundation** — PostgreSQL setup, Flask-SQLAlchemy integration, projections table schema
+- [ ] **Phase 9: DataGolf Fetcher** — API client, name normalization, transactional upsert, cron scheduling, fetch logging
+- [ ] **Phase 10: Projection Source Selector** — UI source picker, DB projection loading, staleness display, empty-state handling, unmatched warnings
+- [ ] **Phase 11: Deploy and Verification** — Production deployment of PostgreSQL + cron + source selector, end-to-end verification on VPS
 
 ## Phase Details
 
-### Phase 4: Constraint Foundation
-**Goal**: The optimizer correctly enforces lock and exclude constraints, detects conflicts and infeasibility before solving, and clears stale state when new CSVs are uploaded
-**Depends on**: Phase 3 (v1.0 complete)
-**Requirements**: LOCK-01, LOCK-02, LOCK-03, LOCK-04, EXCL-01, EXCL-02, UI-04
+### Phase 8: Database Foundation
+**Goal**: The Flask app connects to PostgreSQL and has a projections table ready for the fetcher to write to
+**Depends on**: Phase 7 (v1.1 complete)
+**Requirements**: FETCH-05
 **Success Criteria** (what must be TRUE):
-  1. User can lock a specific card (player + multiplier) and the optimizer places that exact card in a lineup
-  2. User can lock a golfer by name and the optimizer includes at least one of their cards across the lineups
-  3. User can exclude a card or golfer and no matching card appears in any lineup
-  4. When locked cards make optimization infeasible, the app surfaces a specific error (salary over cap, collection limit exceeded) before running the solver
-  5. When a lock and exclude target the same card or player, the app warns the user and does not proceed
-  6. Uploading new CSVs clears all lock and exclude selections from the previous session
-**Plans**: 3 plans
+  1. Flask app starts cleanly with a PostgreSQL connection configured via DATABASE_URL environment variable
+  2. A `projections` table exists with columns for player name, projected score, tournament name, and fetch timestamp
+  3. The database connection works correctly with Gunicorn's forked worker model (each worker gets its own connection pool)
+  4. DATABASE_URL and DATAGOLF_API_KEY are loaded from a `.env` file that is not committed to version control
+**Plans**: TBD
 
-Plans:
-- [x] 04-01-PLAN.md — ConstraintSet module and unit test suite (TDD, LOCK-01 through EXCL-02)
-- [x] 04-02-PLAN.md — Composite key migration and engine ILP constraint injection (LOCK-01, LOCK-02, EXCL-01, EXCL-02)
-- [x] 04-03-PLAN.md — Flask session integration and reset banner (UI-04)
-
-### Phase 5: Serialization and Re-Optimize Route
-**Goal**: Users can trigger a fresh optimization using their current lock/exclude selections without re-uploading the roster and projections CSVs
-**Depends on**: Phase 4
-**Requirements**: UI-02
+### Phase 9: DataGolf Fetcher
+**Goal**: The system automatically fetches projections from the DataGolf API and stores them safely in the database on a cron schedule
+**Depends on**: Phase 8
+**Requirements**: FETCH-01, FETCH-02, FETCH-03, FETCH-04, FETCH-06
 **Success Criteria** (what must be TRUE):
-  1. User can click Re-Optimize on the results page and receive updated lineups reflecting the current lock/exclude state
-  2. Re-optimize works without uploading any files — the original card pool is preserved across requests
-  3. Results from re-optimize are identical in layout to the original optimize results
-**Plans**: 2 plans
+  1. Running `flask fetch-projections` retrieves player projections from the DataGolf `fantasy-projection-defaults` endpoint and writes them to the projections table
+  2. DataGolf player names in "Last, First" format are normalized to "First Last" before storage, matching GameBlazers roster name format
+  3. If the API returns an error or fewer than a minimum viable player count, existing stored projections are preserved (not deleted or overwritten)
+  4. A cron job on the VPS triggers the fetcher automatically on Tuesday and Wednesday mornings, with fetch activity (player count, tournament name, timestamp, errors) written to a log file
+  5. Running the fetcher multiple times for the same event is idempotent — it replaces stale data cleanly without duplicating rows
+**Plans**: TBD
 
-Plans:
-- [x] 05-01-PLAN.md — Card serialization helpers and POST /reoptimize route (TDD, UI-02)
-- [x] 05-02-PLAN.md — Re-Optimize form and JS overlay listener in index.html (UI-02)
+**Research flag**: DataGolf API response field names require a live discovery call before writing any parsing code. Make one API call at phase start, log the full raw response, and finalize the Pydantic model and DB schema from the actual field names.
 
-### Phase 6: Lock/Exclude UI
-**Goal**: Users can see their full eligible card pool after uploading CSVs and toggle lock/exclude on individual cards before or after optimizing
-**Depends on**: Phase 5
-**Requirements**: UI-01, UI-03
+### Phase 10: Projection Source Selector
+**Goal**: Users can choose between DataGolf projections from the database or a manually uploaded CSV before running the optimizer
+**Depends on**: Phase 9
+**Requirements**: SRC-01, SRC-02, SRC-03, SRC-04, SRC-05
 **Success Criteria** (what must be TRUE):
-  1. After uploading CSVs, user sees a table of all eligible cards with a lock control and an exclude control per row
-  2. After optimizing, locked cards in the lineup output are visually distinguished so the user can confirm the constraint took effect
-  3. Lock and exclude toggles persist through a re-optimize cycle — selections made before optimizing are still active after results render
-**Plans**: 3 plans
+  1. User sees a "DataGolf" / "Upload CSV" source selector on the optimizer page and can choose either before optimizing
+  2. When "DataGolf" is selected, the optimizer uses the most recently stored projections from the database and produces lineups identically to the CSV path
+  3. The UI displays the stored tournament name and relative fetch age (e.g., "Arnold Palmer Invitational -- fetched 3 days ago") when DataGolf is selected
+  4. If no projections have ever been fetched, the DataGolf option is disabled with a "No projections available yet" message
+  5. When DataGolf projections are used, unmatched player warnings appear for roster players not found in the stored projections (same report format as CSV source)
+**Plans**: TBD
 
-Plans:
-- [x] 06-01-PLAN.md — Test scaffolding: 10 failing tests for UI-01 and UI-03 (TDD wave 0)
-- [ ] 06-02-PLAN.md — Player pool table, checkbox parsing in /reoptimize route, index route template vars (UI-01)
-- [ ] 06-03-PLAN.md — Lock column in lineup output tables with lock icon (UI-03)
-
-### Phase 7: Polish
-**Goal**: Users can manage their lock/exclude state efficiently without having to manually uncheck individual selections
-**Depends on**: Phase 6
-**Requirements**: UI-05, UI-06
+### Phase 11: Deploy and Verification
+**Goal**: The full v1.2 feature set (PostgreSQL, cron fetcher, source selector) is deployed and verified working end-to-end on the production VPS
+**Depends on**: Phase 10
+**Requirements**: (verification phase — validates FETCH-01 through SRC-05 in production environment)
 **Success Criteria** (what must be TRUE):
-  1. User can clear all active locks and excludes with a single button, resetting the state without re-uploading CSVs
-  2. A count of active locks and excludes is visible above the Optimize button so users know their current constraint state at a glance
-**Plans**: 2 plans
-
-Plans:
-- [ ] 07-01-PLAN.md — Test scaffold (5 RED tests) + constraint count display + Clear All server-side tests (UI-05, UI-06)
-- [ ] 07-02-PLAN.md — Sortable player pool columns with data-sort attributes and JS sort functions
+  1. Cron job fires on schedule on the VPS and the fetch log file shows successful fetches with player count and tournament name
+  2. Both projection sources (DataGolf and CSV upload) produce correct optimizer results in the deployed app at gameblazers.silverreyes.net/golf
+  3. PostgreSQL connection pool stays bounded under normal use (verified via `pg_stat_activity`)
+  4. Staleness label displays correct tournament name and relative age for both current-week and prior-week projection states
+**Plans**: TBD
 
 ## Progress
+
+**Execution Order:** Phases 8 -> 9 -> 10 -> 11
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -99,8 +100,12 @@ Plans:
 | 4. Constraint Foundation | v1.1 | 3/3 | Complete | 2026-03-14 |
 | 5. Serialization and Re-Optimize Route | v1.1 | 2/2 | Complete | 2026-03-14 |
 | 6. Lock/Exclude UI | v1.1 | 3/3 | Complete | 2026-03-14 |
-| 7. Polish | 2/2 | Complete   | 2026-03-14 | - |
+| 7. Polish | v1.1 | 2/2 | Complete | 2026-03-14 |
+| 8. Database Foundation | v1.2 | 0/? | Not started | - |
+| 9. DataGolf Fetcher | v1.2 | 0/? | Not started | - |
+| 10. Projection Source Selector | v1.2 | 0/? | Not started | - |
+| 11. Deploy and Verification | v1.2 | 0/? | Not started | - |
 
 ---
 *Roadmap created: 2026-03-13*
-*Last updated: 2026-03-14 after Phase 7 planning (2 plans: constraint count + sortable columns)*
+*Last updated: 2026-03-25 after v1.2 milestone roadmap creation (phases 8-11)*

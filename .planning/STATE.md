@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Automated Projection Fetching
-status: planning
-stopped_at: Defining requirements
+status: ready_to_plan
+stopped_at: Roadmap created, ready to plan Phase 8
 last_updated: "2026-03-25T00:00:00.000Z"
-last_activity: "2026-03-25 — Milestone v1.2 started"
+last_activity: "2026-03-25 — v1.2 roadmap created (phases 8-11)"
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** Generate the best possible cash contest lineups from the user's available player cards, maximizing expected score within salary and collection constraints.
-**Current focus:** Defining requirements for v1.2 — Automated Projection Fetching
+**Current focus:** v1.2 Automated Projection Fetching — Phase 8 ready to plan
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 8 of 11 (Database Foundation) — first phase of v1.2
 Plan: —
-Status: Defining requirements
-Last activity: 2026-03-25 — Milestone v1.2 started
+Status: Ready to plan
+Last activity: 2026-03-25 — v1.2 roadmap created (phases 8-11)
 
-Progress: [░░░░░░░░░░] 0% (0/0 plans done)
+Progress: [░░░░░░░░░░] 0% (0/? plans done)
 
 ## Accumulated Context
 
@@ -39,11 +39,11 @@ Progress: [░░░░░░░░░░] 0% (0/0 plans done)
 All key decisions logged in PROJECT.md Key Decisions table.
 
 Recent decisions affecting current work:
-- Projection source selector: user picks DataGolf or uploads CSV per session — not a persistent setting
-- Stale data behavior: show last fetched projections with date/age label when no current-week data (not disable)
-- Database: PostgreSQL — chosen for v1.3 user-accounts compatibility
-- DataGolf API key: provided by user when needed — stored as VPS environment variable (not in codebase)
-- Cron schedule: Tuesday + Wednesday mornings (Ubuntu 24.04 system cron)
+- Database: PostgreSQL via Flask-SQLAlchemy (Core queries, no ORM) with Flask-Migrate for schema migrations
+- HTTP client: httpx for DataGolf API calls (timeout as first-class param, no C deps)
+- Scheduler: system cron invoking `flask fetch-projections` CLI command (no APScheduler/Celery)
+- Secrets: `.env` file with python-dotenv (DATABASE_URL + DATAGOLF_API_KEY)
+- Name normalization: `parse_datagolf_name()` for "Last, First" -> "First Last" + existing `normalize_name()` NFKD pipeline
 
 ### Pending Todos
 
@@ -51,10 +51,11 @@ None.
 
 ### Blockers/Concerns
 
-- DataGolf Scratch Plus API key not yet obtained — user will provide before cron deployment phase.
+- DataGolf API response field names unconfirmed — requires live discovery call at Phase 9 start
+- DataGolf Scratch Plus API key needed before Phase 9 execution
 
 ## Session Continuity
 
-Last session: 2026-03-25T00:00:00.000Z
-Stopped at: Defining requirements
+Last session: 2026-03-25
+Stopped at: v1.2 roadmap created
 Resume file: None

@@ -92,23 +92,24 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FETCH-01 | — | Pending |
-| FETCH-02 | — | Pending |
-| FETCH-03 | — | Pending |
-| FETCH-04 | — | Pending |
-| FETCH-05 | — | Pending |
-| FETCH-06 | — | Pending |
-| SRC-01 | — | Pending |
-| SRC-02 | — | Pending |
-| SRC-03 | — | Pending |
-| SRC-04 | — | Pending |
-| SRC-05 | — | Pending |
+| FETCH-01 | Phase 9 | Pending |
+| FETCH-02 | Phase 9 | Pending |
+| FETCH-03 | Phase 9 | Pending |
+| FETCH-04 | Phase 9 | Pending |
+| FETCH-05 | Phase 8 | Pending |
+| FETCH-06 | Phase 9 | Pending |
+| SRC-01 | Phase 10 | Pending |
+| SRC-02 | Phase 10 | Pending |
+| SRC-03 | Phase 10 | Pending |
+| SRC-04 | Phase 10 | Pending |
+| SRC-05 | Phase 10 | Pending |
 
 **Coverage:**
 - v1.2 requirements: 11 total
-- Mapped to phases: 0
-- Unmapped: 11 ⚠️ (roadmap pending)
+- Mapped to phases: 11
+- Unmapped: 0
+- Phase 11 (Deploy and Verification): verification phase — validates all requirements in production, owns no unique requirements
 
 ---
 *Requirements defined: 2026-03-14*
-*Last updated: 2026-03-25 after v1.2 milestone definition*
+*Last updated: 2026-03-25 after v1.2 roadmap creation (traceability populated)*
