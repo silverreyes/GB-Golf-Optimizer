@@ -9,7 +9,7 @@ REMOTE_PATH="/root/GBGolfOptimizer"
 LOCAL_PATH="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "Syncing files..."
-rsync -avz --checksum \
+rsync -rlvz --checksum --delete \
   --exclude='.planning' \
   --exclude='.git' \
   --exclude='__pycache__' \
