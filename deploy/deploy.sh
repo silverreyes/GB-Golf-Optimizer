@@ -9,17 +9,19 @@ REMOTE_PATH="/opt/GBGolfOptimizer"
 LOCAL_PATH="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "Syncing files..."
-rsync -rlvz --checksum --delete \
-  --exclude='.planning' \
-  --exclude='.git' \
-  --exclude='__pycache__' \
-  --exclude='*.pyc' \
-  --exclude='*.pyc' \
-  --exclude='venv' \
-  --exclude='*.sock' \
-  "$LOCAL_PATH/" "$REMOTE:$REMOTE_PATH/"
+tar -czf - \
+  --exclude='./.planning' \
+  --exclude='./.git' \
+  --exclude='./__pycache__' \
+  --exclude='./**/__pycache__' \
+  --exclude='./*.pyc' \
+  --exclude='./**/*.pyc' \
+  --exclude='./venv' \
+  --exclude='./*.sock' \
+  -C "$LOCAL_PATH" . \
+  | ssh "$REMOTE" "tar -xzf - -C $REMOTE_PATH"
 
 echo "Restarting service..."
-ssh "$REMOTE" "systemctl restart gbgolf && systemctl status gbgolf --no-pager"
+ssh "$REMOTE" "sudo systemctl restart gbgolf && systemctl status gbgolf --no-pager"
 
 echo "Done. Visit http://gameblazers.silverreyes.net/golf"
