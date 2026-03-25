@@ -119,7 +119,7 @@ def index():
             card_pool=sorted(validation.valid_cards, key=lambda c: (c.player, -c.salary)),
             locked_card_keys=set(),        # session just cleared — no locks on fresh upload
             locked_golfer_set=set(),
-            excluded_card_keys=set(),
+            excluded_player_set=set(),
         )
 
     except ValueError as exc:
@@ -172,21 +172,18 @@ def reoptimize():
 
     # Parse checkbox submissions from form
     locked_cards = _parse_card_keys(request.form.getlist("lock_card"))
-    excluded_cards = _parse_card_keys(request.form.getlist("exclude_card"))
     locked_golfers = [v for v in request.form.getlist("lock_golfer") if v]
-    excluded_players = session.get("excluded_players", [])  # preserved, not cleared
+    excluded_players = [v for v in request.form.getlist("exclude_golfer") if v]
 
     # Write parsed constraints to session
     session["locked_cards"] = [list(k) for k in locked_cards]
     session["locked_golfers"] = locked_golfers
-    session["excluded_cards"] = [list(k) for k in excluded_cards]
     session["excluded_players"] = excluded_players
 
     # Build ConstraintSet from parsed values (not from session re-read)
     constraints = ConstraintSet(
         locked_cards=locked_cards,
         locked_golfers=locked_golfers,
-        excluded_cards=excluded_cards,
         excluded_players=excluded_players,
     )
 
@@ -221,5 +218,5 @@ def reoptimize():
         card_pool=sorted(valid_cards, key=lambda c: (c.player, -c.salary)),
         locked_card_keys=set(locked_cards),
         locked_golfer_set=set(locked_golfers),
-        excluded_card_keys=set(excluded_cards),
+        excluded_player_set=set(excluded_players),
     )

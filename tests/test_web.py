@@ -338,7 +338,7 @@ def test_player_pool_table_columns(client):
     # Headers now have onclick attributes; check for text content within th elements
     assert ">Lock</th>" in html
     assert ">Lock Golfer</th>" in html
-    assert ">Exclude</th>" in html
+    assert ">Exclude Golfer</th>" in html
     assert ">Player</th>" in html
     assert ">Collection</th>" in html
     assert ">Salary</th>" in html
@@ -347,18 +347,18 @@ def test_player_pool_table_columns(client):
 
 
 def test_lock_exclude_checkboxes_in_form(client):
-    """POST CSVs → HTML contains lock_card and exclude_card inputs inside reoptimize-form."""
+    """POST CSVs → HTML contains lock_card and exclude_golfer inputs inside reoptimize-form."""
     response = _post_csvs(client, SAMPLE_ROSTER_CSV, SAMPLE_PROJECTIONS_CSV)
     assert response.status_code == 200
     html = response.data.decode("utf-8")
     # Inputs must exist somewhere in the HTML
     assert 'name="lock_card"' in html
-    assert 'name="exclude_card"' in html
+    assert 'name="exclude_golfer"' in html
     # The reoptimize-form must exist
     form_start = html.index('id="reoptimize-form"')
     # Both inputs must appear after the form start (inside the form)
     assert html.index('name="lock_card"') > form_start
-    assert html.index('name="exclude_card"') > form_start
+    assert html.index('name="exclude_golfer"') > form_start
 
 
 def test_lock_golfer_first_row_only(client):
@@ -398,20 +398,20 @@ def test_reoptimize_parses_lock_checkboxes(client):
 
 
 def test_reoptimize_parses_exclude_checkboxes(client):
-    """POST /reoptimize with exclude_card → session['excluded_cards'] contains parsed entry."""
+    """POST /reoptimize with exclude_golfer → session['excluded_players'] contains player name."""
     card_pool_json = _build_card_pool_json()
     response = client.post(
         "/reoptimize",
         data={
             "card_pool": card_pool_json,
-            "exclude_card": "Player B|10500|1.4|Core",
+            "exclude_golfer": "Player B",
         },
         content_type="multipart/form-data",
     )
     assert response.status_code == 200
     with client.session_transaction() as sess:
-        excluded = sess.get("excluded_cards", [])
-    assert ["Player B", 10500, 1.4, "Core"] in excluded
+        excluded = sess.get("excluded_players", [])
+    assert "Player B" in excluded
 
 
 def test_reoptimize_parses_lock_golfer(client):
