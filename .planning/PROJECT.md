@@ -26,20 +26,32 @@ Generate the best possible cash contest lineups from the user's available player
 - ✓ Cards past their Expires date excluded from optimization — v1.0
 - ✓ Unmatched player report surfaced in UI — v1.0
 - ✓ App deployed to Hostinger KVM 2 VPS at gameblazers.silverreyes.net/golf — v1.0
+- ✓ User can lock a specific card or golfer into lineups; app re-optimizes with lock constraints — v1.1
+- ✓ User can exclude a golfer from all lineups for a session — v1.1
+- ✓ App re-optimizes with locked/excluded constraints without re-uploading CSVs — v1.1
+- ✓ Lock/exclude UI in player pool table; sortable columns and active constraint count display — v1.1
+- ✓ Full aesthetic redesign — GameBlazers × SilverReyes dark theme (Prompt + JetBrains Mono, orange/gold palette) — v1.1
 
-## Current Milestone: v1.1 Manual Lock/Exclude
+## Current Milestone: v1.2 Automated Projection Fetching
 
-**Goal:** Let users force specific cards or golfers in or out of optimization after uploading CSVs, with the ability to adjust and re-optimize iteratively within a session.
+**Goal:** Automatically fetch DFS golf projections from the DataGolf Scratch Plus API on a schedule and store them in a database, letting users choose between DataGolf projections or a manually uploaded CSV before optimizing.
 
 **Target features:**
-- Lock a specific card (force a particular card into optimizer)
-- Lock a golfer by name (any of their cards may be used)
-- Exclude a card or golfer (removed from all lineups for this session)
-- Accessible before and after optimizing; resets on new CSV upload
+- DataGolf Scratch Plus API integration (`fantasy-projection-defaults` endpoint, PGA Tour / DraftKings / main slate)
+- Cron fetcher on Ubuntu 24.04 VPS (Tuesday + Wednesday mornings)
+- PostgreSQL database for projection storage (v1.3-user-accounts-compatible)
+- Projection source selector in optimizer UI (DataGolf or CSV upload)
+- Show last fetched projections with staleness label when current-week data not yet available
 
 ### Active
 
-- [ ] Manual lock/exclude — user can force a specific card or golfer in or out before optimizing (USBL-03)
+- [ ] DataGolf API fetcher — HTTP client fetches `fantasy-projection-defaults` and stores results in DB (PROJ-01, PROJ-02)
+- [ ] PostgreSQL database — stores fetched projections with tournament week and fetch timestamp (PROJ-03)
+- [ ] Projection source selector — user picks DataGolf or uploads CSV before optimizing (PROJ-04)
+- [ ] Stale data display — show last fetched data with date/age label when no current-week projections (PROJ-05)
+
+### Backlog (future milestones)
+
 - [ ] Contest configuration editor in the web UI (USBL-01)
 - [ ] Card comparison view — side-by-side display of multiple cards for same player (USBL-02)
 - [ ] Lineup export — copy to clipboard or download as CSV (USBL-04)
@@ -50,7 +62,8 @@ Generate the best possible cash contest lineups from the user's available player
 ### Out of Scope
 
 - Scraping GameBlazers for contest data — manual config file update instead (contests change infrequently)
-- Automatic projection fetching — user manually averages projections from multiple DFS sites
+- Multi-source projection averaging — single DataGolf source for v1.2; averaging across sources is v2.0
+- DataGolf data beyond projections — v1.2 uses `fantasy-projection-defaults` only (no strokes gained, rankings, etc.)
 - User accounts / authentication — single shared app, no login required
 - Mobile-native app — web app accessible from any browser
 - RUC (Recycling Useless Cards) optimization — separate system
@@ -66,7 +79,7 @@ Generate the best possible cash contest lineups from the user's available player
 - **Duplicate player cards**: Same player can appear multiple times with different multipliers/salaries; each card is a distinct optimizer variable, but a golfer may only appear once per lineup.
 - **Two contests**: The Tips (cash, 3 entries) and The Intermediate Tee (non-cash, 2 entries).
 - **Scoring**: Eagles (+8), birdies (+4), pars (-0.5), bogeys (-1), double bogeys (-3), double eagle or better (+15), birdie streaks (+3), bogey-free round (+2), hole-in-one (+5), plus finish position bonuses.
-- **Projections**: User averages from multiple DFS sites (DataGolf, FantasyNational, etc.) and uploads weekly.
+- **Projections**: DataGolf Scratch Plus API (`fantasy-projection-defaults`, PGA Tour / DraftKings / main slate) fetched automatically on Tue/Wed and stored in PostgreSQL. User can also upload a custom CSV. Source selected per optimizer session. If current-week fetch hasn't run, last fetched data is shown with a staleness label.
 - **Hosting**: Hostinger KVM 2 VPS — full Linux server. Live at gameblazers.silverreyes.net/golf.
 - **v1.0 shipped**: 2026-03-13. 1,407 LOC Python. 33 tests, all GREEN. App browser-verified.
 
@@ -74,7 +87,8 @@ Generate the best possible cash contest lineups from the user's available player
 
 - **Tech Stack**: Python (Flask, PuLP, Pydantic v2) + Jinja2/HTML/CSS
 - **Hosting**: Hostinger KVM 2 VPS at silverreyes.net — Gunicorn + Nginx + systemd
-- **Data input**: No scraping — file uploads (roster CSV, projections CSV) or manual config
+- **Data input**: No scraping — DataGolf API (automated cron), file uploads (roster CSV, custom projections CSV), or manual config
+- **Database**: PostgreSQL — stores fetched projections; schema designed for v1.3 user accounts
 - **Card locking**: Each card may only appear in exactly one lineup across all contests in a session
 
 ## Key Decisions
@@ -95,4 +109,4 @@ Generate the best possible cash contest lineups from the user's available player
 | ProxyFix skipped in TESTING mode | Avoids Flask test client URL generation conflicts | ✓ Good |
 
 ---
-*Last updated: 2026-03-14 after v1.1 milestone start*
+*Last updated: 2026-03-25 after v1.2 milestone start*
