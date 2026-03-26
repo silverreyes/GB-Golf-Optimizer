@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Automated Projection Fetching
-status: in-progress
-stopped_at: Completed 11-01-PLAN.md
-last_updated: "2026-03-26T02:22:38Z"
-last_activity: 2026-03-26 — Phase 11 plan 01 complete (PRAGMA fix + deploy migration step)
+status: complete
+stopped_at: Completed 11-02-PLAN.md — v1.2 milestone complete
+last_updated: "2026-03-26T02:42:00Z"
+last_activity: 2026-03-26 — Phase 11 plan 02 complete (DEPLOY.md rewrite + production verification)
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 7
-  completed_plans: 6
-  percent: 86
+  completed_plans: 7
+  percent: 100
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-25)
 ## Current Position
 
 Phase: 11 of 11 (Deploy and Verification) — fourth phase of v1.2
-Plan: 1 of 2 (11-01 complete — PRAGMA fix + deploy migration step)
-Status: In progress
-Last activity: 2026-03-26 — Phase 11 plan 01 complete (PRAGMA fix + deploy migration step)
+Plan: 2 of 2 (11-02 complete — DEPLOY.md rewrite + production verification)
+Status: Complete — v1.2 milestone shipped
+Last activity: 2026-03-26 — Phase 11 plan 02 complete (DEPLOY.md rewrite + production verification)
 
-Progress: [########░░] 86% (6/7 plans done overall)
+Progress: [##########] 100% (7/7 plans done overall)
 
 ## Accumulated Context
 
@@ -78,9 +78,10 @@ None — DataGolf API field names confirmed, API key working.
 | 10 | 01 | 3min | 2 | 3 |
 | 10 | 02 | 4min | 2 | 4 |
 | 11 | 01 | 4min | 2 | 3 |
+| 11 | 02 | 12min | 2 | 1 |
 
 ## Session Continuity
 
-Last session: 2026-03-26T02:22:38Z
-Stopped at: Completed 11-01-PLAN.md
-Resume file: .planning/phases/11-deploy-and-verification/11-01-SUMMARY.md
+Last session: 2026-03-26T02:42:00Z
+Stopped at: Completed 11-02-PLAN.md — v1.2 milestone complete
+Resume file: .planning/phases/11-deploy-and-verification/11-02-SUMMARY.md

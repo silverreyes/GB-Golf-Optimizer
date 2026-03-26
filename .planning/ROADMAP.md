@@ -4,7 +4,7 @@
 
 - ✅ **v1.0 MVP** — Phases 1-3 (shipped 2026-03-13)
 - ✅ **v1.1 Manual Lock/Exclude** — Phases 4-7 (shipped 2026-03-25)
-- 🚧 **v1.2 Automated Projection Fetching** — Phases 8-11 (in progress)
+- ✅ **v1.2 Automated Projection Fetching** — Phases 8-11 (shipped 2026-03-26)
 
 ## Phases
 
@@ -29,14 +29,14 @@ See: `.planning/milestones/v1.0-ROADMAP.md` for full phase details.
 
 </details>
 
-### 🚧 v1.2 Automated Projection Fetching (In Progress)
+### ✅ v1.2 Automated Projection Fetching (SHIPPED 2026-03-26)
 
 **Milestone Goal:** Automatically fetch DFS golf projections from the DataGolf API on a schedule and store them in PostgreSQL, letting users choose between DataGolf projections or a manually uploaded CSV before optimizing.
 
 - [x] **Phase 8: Database Foundation** — PostgreSQL setup, Flask-SQLAlchemy integration, projections table schema
 - [x] **Phase 9: DataGolf Fetcher** — API client, name normalization, transactional upsert, cron scheduling, fetch logging (completed 2026-03-25)
 - [x] **Phase 10: Projection Source Selector** — UI source picker, DB projection loading, staleness display, empty-state handling, unmatched warnings (completed 2026-03-26)
-- [ ] **Phase 11: Deploy and Verification** — Production deployment of PostgreSQL + cron + source selector, end-to-end verification on VPS
+- [x] **Phase 11: Deploy and Verification** — Production deployment of PostgreSQL + cron + source selector, end-to-end verification on VPS (completed 2026-03-26)
 
 ## Phase Details
 
@@ -92,10 +92,10 @@ Plans:
   2. Both projection sources (DataGolf and CSV upload) produce correct optimizer results in the deployed app at gameblazers.silverreyes.net/golf
   3. PostgreSQL connection pool stays bounded under normal use (verified via `pg_stat_activity`)
   4. Staleness label displays correct tournament name and relative age for both current-week and prior-week projection states
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
-- [ ] 11-01-PLAN.md — Fix PRAGMA PostgreSQL bug in fetcher.py, update deploy.sh with migration step and .venv exclusion
-- [ ] 11-02-PLAN.md — Rewrite DEPLOY.md as authoritative v1.2 guide, production deployment and end-to-end verification checkpoint
+- [x] 11-01-PLAN.md — Fix PRAGMA PostgreSQL bug in fetcher.py, update deploy.sh with migration step and .venv exclusion
+- [x] 11-02-PLAN.md — Rewrite DEPLOY.md as authoritative v1.2 guide, production deployment and end-to-end verification checkpoint
 
 ## Progress
 
@@ -113,8 +113,8 @@ Plans:
 | 8. Database Foundation | v1.2 | 1/1 | Complete | 2026-03-25 |
 | 9. DataGolf Fetcher | v1.2 | 2/2 | Complete | 2026-03-25 |
 | 10. Projection Source Selector | v1.2 | Complete    | 2026-03-26 | 2026-03-26 |
-| 11. Deploy and Verification | 1/2 | In Progress|  | - |
+| 11. Deploy and Verification | v1.2 | 2/2 | Complete | 2026-03-26 |
 
 ---
 *Roadmap created: 2026-03-13*
-*Last updated: 2026-03-26 after Phase 11 planning complete (2 plans created)*
+*Last updated: 2026-03-26 after Phase 11 complete -- v1.2 milestone shipped*
