@@ -5,7 +5,7 @@ milestone_name: Automated Projection Fetching
 status: archived
 stopped_at: v1.2 milestone archived — ready for next milestone planning
 last_updated: "2026-03-26T04:30:00Z"
-last_activity: 2026-03-26 — Completed quick task 260326-iba: Add hybrid projection source mode
+last_activity: 2026-03-26 — Post-v1.2 UI/QoL improvements: CSV hints, hybrid source mode, player pool UX
 progress:
   total_phases: 4
   completed_phases: 4
@@ -48,3 +48,8 @@ None.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260326-iba | Add hybrid projection source mode | 2026-03-26 | b961802 | [260326-iba-add-hybrid-projection-source-mode](.planning/quick/260326-iba-add-hybrid-projection-source-mode/) |
+| — | CSV format hint (column names) inline with Upload CSV radio | 2026-03-26 | aa38e37 | — |
+| — | Hybrid mode description hint (partial CSV + DataGolf backfill) | 2026-03-26 | a1a3932 | — |
+| — | Upload CSV mode description hint (no DataGolf backfill) | 2026-03-26 | 52cfbb6 | — |
+| — | Player pool collapsed by default; lock/exclude descriptions in summary bar | 2026-03-26 | 22bf706 | — |
+| — | Fix lock description: "at least one lineup" not "every lineup" | 2026-03-26 | c1c39d6 | — |
