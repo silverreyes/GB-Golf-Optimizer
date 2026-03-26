@@ -15,5 +15,6 @@ jobs:
 
       - name: Push mirror
         run: |
-          git remote add professional https://x-access-token:${{ secrets.PROFESSIONAL_GITHUB_TOKEN }}@github.com/silverreyes/GB-Golf-Optimizer
+          git config --global url."https://x-access-token:${{ secrets.PROFESSIONAL_GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+          git remote add professional https://github.com/silverreyes/GB-Golf-Optimizer.git
           git push professional --mirror
