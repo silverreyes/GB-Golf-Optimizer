@@ -1,0 +1,19 @@
+name: Mirror to Professional GitHub
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push mirror
+        run: |
+          git remote add professional https://x-access-token:${{ secrets.PROFESSIONAL_GITHUB_TOKEN }}@github.com/silverreyes/GB-Golf-Optimizer.git
+          git push professional --mirror

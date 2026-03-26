@@ -5,7 +5,16 @@
       "Bash(python -m pytest tests/ -v 2>&1)",
       "WebFetch(domain:silverreyes.net)",
       "WebFetch(domain:gameblazers.net)",
-      "WebFetch(domain:gameblazers.com)"
+      "WebFetch(domain:gameblazers.com)",
+      "Bash(node \"C:/Users/silve/.claude/get-shit-done/bin/gsd-tools.cjs\" init new-milestone)",
+      "Bash(node \"C:/Users/silve/.claude/get-shit-done/bin/gsd-tools.cjs\" commit \"docs: start milestone v1.2 Automated Projection Fetching\" --files .planning/PROJECT.md .planning/STATE.md)",
+      "WebFetch(domain:datagolf.com)",
+      "WebFetch(domain:forum.datagolf.com)",
+      "WebFetch(domain:pypi.org)",
+      "WebFetch(domain:github.com)",
+      "Bash(python -m pytest -x -q)",
+      "Bash(echo \"EXIT_CODE=$?\")",
+      "Bash(python -m pytest -v --tb=no)"
     ]
   }
 }
