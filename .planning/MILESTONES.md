@@ -1,5 +1,20 @@
 # Milestones
 
+## v1.2 Automated Projection Fetching (Shipped: 2026-03-26)
+
+**Phases completed:** 4 phases (08–11), 7 plans, 15 tasks
+
+**Stats:** 4 phases · 7 plans · 3,831 LOC Python · 2026-03-25 → 2026-03-26
+
+**Key accomplishments:**
+- Two-table PostgreSQL schema (fetches + projections) with Flask-SQLAlchemy Core, Flask-Migrate migrations, and python-dotenv secrets loading
+- DataGolf fetch pipeline (httpx API client, Pydantic boundary validation, atomic DELETE CASCADE + INSERT upsert, 30-player guard, file-append logging)
+- Flask CLI command `flask fetch-projections` with cron scheduling (Tue/Wed) for automatic projection fetching — 134 players per fetch
+- Projection source selector UI (DataGolf / Upload CSV radio buttons, staleness label, empty-state disabled state, unmatched player warnings)
+- Production deployment with PRAGMA dialect guard for PostgreSQL safety, deploy.sh `.env` exclusion fix, and end-to-end verification of both sources on VPS
+
+---
+
 ## v1.0 MVP (Shipped: 2026-03-14)
 
 **Phases completed:** 3 phases, 10 plans, 0 tasks

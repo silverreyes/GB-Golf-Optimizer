@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A web application for optimizing GameBlazers fantasy golf lineups. Users upload their weekly roster export (CSV from GameBlazers) and a projections CSV, and the app generates optimal lineups for each available contest — prioritizing the cash contest (The Tips) first, then using remaining cards for The Intermediate Tee. Deployed live at http://gameblazers.silverreyes.net/golf/.
+A web application for optimizing GameBlazers fantasy golf lineups. Users upload their weekly roster export (CSV from GameBlazers) and either select auto-fetched DataGolf projections or upload a custom projections CSV, and the app generates optimal lineups for each available contest — prioritizing the cash contest (The Tips) first, then using remaining cards for The Intermediate Tee. Deployed live at https://gameblazers.silverreyes.net/golf/.
 
 ## Core Value
 
@@ -31,33 +31,25 @@ Generate the best possible cash contest lineups from the user's available player
 - ✓ App re-optimizes with locked/excluded constraints without re-uploading CSVs — v1.1
 - ✓ Lock/exclude UI in player pool table; sortable columns and active constraint count display — v1.1
 - ✓ Full aesthetic redesign — GameBlazers × SilverReyes dark theme (Prompt + JetBrains Mono, orange/gold palette) — v1.1
-
-## Current Milestone: v1.2 Automated Projection Fetching
-
-**Goal:** Automatically fetch DFS golf projections from the DataGolf Scratch Plus API on a schedule and store them in a database, letting users choose between DataGolf projections or a manually uploaded CSV before optimizing.
-
-**Target features:**
-- DataGolf Scratch Plus API integration (`fantasy-projection-defaults` endpoint, PGA Tour / DraftKings / main slate)
-- Cron fetcher on Ubuntu 24.04 VPS (Tuesday + Wednesday mornings)
-- PostgreSQL database for projection storage (v1.3-user-accounts-compatible)
-- Projection source selector in optimizer UI (DataGolf or CSV upload)
-- Show last fetched projections with staleness label when current-week data not yet available
+- ✓ DataGolf API fetcher — `flask fetch-projections` CLI fetches `fantasy-projection-defaults` and writes to PostgreSQL — v1.2
+- ✓ Cron scheduler — automatic Tuesday/Wednesday fetches with file-append logging — v1.2
+- ✓ Projection source selector — user picks DataGolf (DB) or Upload CSV before optimizing; staleness label shown — v1.2
+- ✓ Stale data display — last fetched tournament name + relative age shown regardless of currency — v1.2
+- ✓ PostgreSQL database — fetches/projections tables with Flask-SQLAlchemy Core and Flask-Migrate — v1.2
 
 ### Active
 
-- [ ] DataGolf API fetcher — HTTP client fetches `fantasy-projection-defaults` and stores results in DB (PROJ-01, PROJ-02)
-- [ ] PostgreSQL database — stores fetched projections with tournament week and fetch timestamp (PROJ-03)
-- [ ] Projection source selector — user picks DataGolf or uploads CSV before optimizing (PROJ-04)
-- [ ] Stale data display — show last fetched data with date/age label when no current-week projections (PROJ-05)
+- [ ] Contest configuration editor in the web UI (USBL-01)
+- [ ] Lineup export — copy to clipboard or download as CSV (USBL-04)
+- [ ] Exposure limits — cap how often a single golfer appears across all lineups (ADV-01)
 
 ### Backlog (future milestones)
 
-- [ ] Contest configuration editor in the web UI (USBL-01)
 - [ ] Card comparison view — side-by-side display of multiple cards for same player (USBL-02)
-- [ ] Lineup export — copy to clipboard or download as CSV (USBL-04)
-- [ ] Exposure limits — cap how often a single golfer appears across all lineups (ADV-01)
 - [ ] Diversity constraints — enforce minimum player differences between lineups (ADV-02)
 - [ ] Sensitivity analysis — show how lineup changes if a player's projection shifts (ADV-03)
+- [ ] Manual projection refresh from UI without waiting for cron (MGMT-01)
+- [ ] Fetch status dashboard — last fetch time, player count, error history (MGMT-02)
 
 ### Out of Scope
 
@@ -82,6 +74,8 @@ Generate the best possible cash contest lineups from the user's available player
 - **Projections**: DataGolf Scratch Plus API (`fantasy-projection-defaults`, PGA Tour / DraftKings / main slate) fetched automatically on Tue/Wed and stored in PostgreSQL. User can also upload a custom CSV. Source selected per optimizer session. If current-week fetch hasn't run, last fetched data is shown with a staleness label.
 - **Hosting**: Hostinger KVM 2 VPS — full Linux server. Live at gameblazers.silverreyes.net/golf.
 - **v1.0 shipped**: 2026-03-13. 1,407 LOC Python. 33 tests, all GREEN. App browser-verified.
+- **v1.1 shipped**: 2026-03-25. Lock/exclude constraints, re-optimize route, full dark theme redesign.
+- **v1.2 shipped**: 2026-03-26. 3,831 LOC Python. DataGolf auto-fetch, PostgreSQL, projection source selector. App live at https://gameblazers.silverreyes.net/golf/.
 
 ## Constraints
 
@@ -107,6 +101,13 @@ Generate the best possible cash contest lineups from the user's available player
 | Windows-safe temp file pattern | Write inside with-block, pass path after close — avoids NamedTemporaryFile locking on Windows | ✓ Good |
 | SCRIPT_NAME via systemd env var | Flask/Werkzeug reads it to generate correct URLs under /golf prefix without code changes | ✓ Good |
 | ProxyFix skipped in TESTING mode | Avoids Flask test client URL generation conflicts | ✓ Good |
+| PostgreSQL via Flask-SQLAlchemy Core (no ORM) | Pydantic validates at boundaries; DB tables use Core Table objects directly | ✓ Good |
+| httpx for DataGolf API client | Timeout as first-class param, no C deps, clean async upgrade path | ✓ Good |
+| System cron + Flask CLI (not APScheduler/Celery) | Zero runtime complexity; cron is the right tool for weekly event scheduling | ✓ Good |
+| Separate validate_pipeline_auto() (not modifying validate_pipeline()) | Zero risk to working CSV path; two clean entry points | ✓ Good |
+| deploy.sh excludes .env from tar | Prevents local dev values from overwriting production secrets on every deploy | ✓ Good |
+| Dialect guard for PRAGMA foreign_keys | SQLite tests need FK enforcement; PostgreSQL rejects PRAGMA — conditional on dialect.name | ✓ Good |
+| Staleness threshold: 7 days | Stale data is never hidden; prior-week projections remain available until replaced | ✓ Good |
 
 ---
-*Last updated: 2026-03-25 after v1.2 milestone start*
+*Last updated: 2026-03-26 after v1.2 milestone*

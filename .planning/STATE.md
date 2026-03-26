@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Automated Projection Fetching
-status: complete
-stopped_at: Completed 11-02-PLAN.md — v1.2 milestone complete
-last_updated: "2026-03-26T02:42:00Z"
-last_activity: 2026-03-26 — Phase 11 plan 02 complete (DEPLOY.md rewrite + production verification)
+status: archived
+stopped_at: v1.2 milestone archived — ready for next milestone planning
+last_updated: "2026-03-26T04:30:00Z"
+last_activity: 2026-03-26 — v1.2 milestone archived, git tag created
 progress:
   total_phases: 4
   completed_phases: 4
@@ -18,47 +18,22 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-25)
+See: .planning/PROJECT.md (updated 2026-03-26)
 
 **Core value:** Generate the best possible cash contest lineups from the user's available player cards, maximizing expected score within salary and collection constraints.
-**Current focus:** v1.2 Automated Projection Fetching — Phase 11 in progress (Deploy and Verification)
+**Current focus:** Planning next milestone — use `/gsd:new-milestone`
 
 ## Current Position
 
-Phase: 11 of 11 (Deploy and Verification) — fourth phase of v1.2
-Plan: 2 of 2 (11-02 complete — DEPLOY.md rewrite + production verification)
-Status: Complete — v1.2 milestone shipped
-Last activity: 2026-03-26 — Phase 11 plan 02 complete (DEPLOY.md rewrite + production verification)
-
-Progress: [##########] 100% (7/7 plans done overall)
+Milestone: v1.2 ARCHIVED
+Status: All milestones through v1.2 complete and archived.
+Next step: `/gsd:new-milestone` for fresh context, requirements, and roadmap.
 
 ## Accumulated Context
 
 ### Decisions
 
-All key decisions logged in PROJECT.md Key Decisions table.
-
-Recent decisions affecting current work:
-- Database: PostgreSQL via Flask-SQLAlchemy (Core queries, no ORM) with Flask-Migrate for schema migrations
-- HTTP client: httpx for DataGolf API calls (timeout as first-class param, no C deps)
-- Scheduler: system cron invoking `flask fetch-projections` CLI command (no APScheduler/Celery)
-- Secrets: `.env` file with python-dotenv (DATABASE_URL + DATAGOLF_API_KEY)
-- Name normalization: `parse_datagolf_name()` for "Last, First" -> "First Last" + existing `normalize_name()` NFKD pipeline
-- Phase 8: SQLite in-memory fallback when DATABASE_URL not set (avoids KeyError in test/dev)
-- Phase 8: pool_pre_ping=True for Gunicorn forked worker safety
-- Phase 8: ON DELETE CASCADE at database level for fetches->projections FK
-- Phase 9: DataGolf projected points field is `proj_points_total` (confirmed via live discovery)
-- Phase 9: Tournament name available as top-level `event_name` in API response
-- Phase 9: API response is dict with `projections` list, not flat list
-- Phase 9: SQLite reuses IDs after DELETE — tests verify by player names not IDs
-- Phase 9: CLI uses @app.cli.command (no @with_appcontext needed — Flask 2.0+ provides app context automatically)
-- Phase 9: Cron schedule documented as module docstring in fetcher.py for Phase 11 deployment reference
-- Phase 10: Separate validate_pipeline_auto() function instead of modifying existing validate_pipeline() -- zero risk to CSV path
-- Phase 10: _db_template_vars() helper injected in every render_template call -- prevents missing DB context on error paths
-- Phase 10: Staleness threshold: 7 days (is_stale flag in _get_latest_fetch)
-- Phase 10: Conditional required attribute on projections file input -- only required when CSV source active
-- Phase 10: Hidden input projection_source synced by JS from radio buttons for reliable form submission
-- Phase 11: Used session.get_bind().dialect.name instead of session.bind.dialect.name for Flask-SQLAlchemy scoped session compatibility
+All key decisions logged in PROJECT.md Key Decisions table. v1.2 decisions added on 2026-03-26.
 
 ### Pending Todos
 
@@ -66,22 +41,4 @@ None.
 
 ### Blockers/Concerns
 
-None — DataGolf API field names confirmed, API key working.
-
-## Performance Metrics
-
-| Phase | Plan | Duration | Tasks | Files |
-|-------|------|----------|-------|-------|
-| 08 | 01 | 6min | 3 | 8 |
-| 09 | 01 | 4min | 2 | 5 |
-| 09 | 02 | 3min | 2 | 3 |
-| 10 | 01 | 3min | 2 | 3 |
-| 10 | 02 | 4min | 2 | 4 |
-| 11 | 01 | 4min | 2 | 3 |
-| 11 | 02 | 12min | 2 | 1 |
-
-## Session Continuity
-
-Last session: 2026-03-26T02:42:00Z
-Stopped at: Completed 11-02-PLAN.md — v1.2 milestone complete
-Resume file: .planning/phases/11-deploy-and-verification/11-02-SUMMARY.md
+None.
