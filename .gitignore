@@ -25,3 +25,9 @@ instance/
 
 # Fetch logs
 logs/
+
+# SQLite dev database
+*.db
+
+# Test/scratch CSVs
+test_*.csv
