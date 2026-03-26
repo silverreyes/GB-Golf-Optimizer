@@ -9,7 +9,7 @@ from datetime import date, datetime, timezone
 from flask import Blueprint, current_app, render_template, request, session
 from sqlalchemy import text
 
-from gbgolf.data import validate_pipeline, validate_pipeline_auto
+from gbgolf.data import validate_pipeline, validate_pipeline_auto, validate_pipeline_hybrid
 from gbgolf.data.models import Card
 from gbgolf.db import db
 from gbgolf.optimizer import optimize
@@ -103,9 +103,9 @@ def index():
 
     projection_source = request.form.get("projection_source", "csv")
 
-    # Validate: projections file required only for CSV source
+    # Validate: projections file required for CSV and hybrid sources
     projections_file = request.files.get("projections")
-    if projection_source == "csv" and (not projections_file or projections_file.filename == ""):
+    if projection_source in ("csv", "hybrid") and (not projections_file or projections_file.filename == ""):
         return render_template("index.html", error="Projections file is required.", **_db_template_vars())
 
     # CLEAR lock/exclude session keys on file upload (UI-04)
@@ -136,6 +136,13 @@ def index():
 
         if projection_source == "auto":
             validation = validate_pipeline_auto(roster_tmp, config_path)
+        elif projection_source == "hybrid":
+            if not projections_file or projections_file.filename == "":
+                return render_template("index.html", error="Projections file is required.", **_db_template_vars())
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".csv", mode="wb") as pf:
+                projections_file.save(pf)
+                projections_tmp = pf.name
+            validation = validate_pipeline_hybrid(roster_tmp, projections_tmp, config_path)
         else:
             if not projections_file:
                 return render_template("index.html", error="Projections file is required.", **_db_template_vars())

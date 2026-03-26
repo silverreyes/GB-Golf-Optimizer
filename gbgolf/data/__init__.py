@@ -1,7 +1,7 @@
 """
 GB Golf Optimizer data layer.
-Public API: validate_pipeline(), validate_pipeline_auto(), load_cards(), load_config(),
-            load_projections_from_db()
+Public API: validate_pipeline(), validate_pipeline_auto(), validate_pipeline_hybrid(),
+            load_cards(), load_config(), load_projections_from_db()
 """
 from sqlalchemy import text
 
@@ -111,9 +111,52 @@ def validate_pipeline_auto(roster_path: str, config_path: str) -> ValidationResu
     )
 
 
+def validate_pipeline_hybrid(
+    roster_path: str,
+    projections_path: str,
+    config_path: str,
+) -> ValidationResult:
+    """Validation pipeline merging CSV projections (priority) with DB projections (fallback).
+
+    CSV projections overwrite DB projections on name conflict. Players missing
+    from both sources get projected_score=None and are filtered out by apply_filters.
+    """
+    cards = parse_roster_csv(roster_path)
+    csv_projections, warnings = parse_projections_csv(projections_path)
+
+    try:
+        db_projections = load_projections_from_db()
+    except ValueError:
+        db_projections = {}
+
+    # Merge: DB first, then CSV overwrites — gives CSV priority
+    merged = {**db_projections, **csv_projections}
+
+    enriched = match_projections(cards, merged)
+    contests = load_config(config_path)
+
+    valid_cards, excluded = apply_filters(enriched)
+
+    if contests:
+        min_required = min(c.roster_size for c in contests)
+        if len(valid_cards) < min_required:
+            raise ValueError(
+                f"Only {len(valid_cards)} valid card(s) found — "
+                f"smallest contest requires at least {min_required}. "
+                f"Check your exclusion report."
+            )
+
+    return ValidationResult(
+        valid_cards=valid_cards,
+        excluded=excluded,
+        projection_warnings=warnings,
+    )
+
+
 __all__ = [
     "validate_pipeline",
     "validate_pipeline_auto",
+    "validate_pipeline_hybrid",
     "load_cards",
     "load_config",
     "load_projections_from_db",
