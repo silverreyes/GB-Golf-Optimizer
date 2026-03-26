@@ -64,6 +64,9 @@ def _get_latest_fetch():
     if row is None:
         return None
     fetched_at = row["fetched_at"]
+    # SQLite returns datetime as string; PostgreSQL returns datetime object
+    if isinstance(fetched_at, str):
+        fetched_at = datetime.fromisoformat(fetched_at)
     now = datetime.now(timezone.utc)
     if fetched_at.tzinfo is None:
         fetched_at = fetched_at.replace(tzinfo=timezone.utc)

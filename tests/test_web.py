@@ -542,3 +542,185 @@ def test_sort_headers_rendered(client):
     assert response.status_code == 200
     html = response.data.decode("utf-8")
     assert 'onclick="sortTable(' in html
+
+
+# ---------------------------------------------------------------------------
+# Helpers for Phase 10: Projection Source Selector tests
+# ---------------------------------------------------------------------------
+
+
+def _seed_projections(app, players_scores, tournament_name="Test Open", days_ago=2):
+    """Seed the DB with a fetch + projections for web tests.
+
+    Args:
+        app: Flask app with app context
+        players_scores: list of (player_name, projected_score) tuples
+        tournament_name: tournament name for the fetch record
+        days_ago: how many days ago the fetch occurred
+    """
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import text
+    from gbgolf.db import db
+
+    fetched_at = datetime.now(timezone.utc) - timedelta(days=days_ago)
+    with app.app_context():
+        db.session.execute(
+            text(
+                "INSERT INTO fetches (tournament_name, fetched_at, player_count, source, tour) "
+                "VALUES (:tn, :fa, :pc, :src, :tour)"
+            ),
+            {
+                "tn": tournament_name,
+                "fa": fetched_at,
+                "pc": len(players_scores),
+                "src": "datagolf",
+                "tour": "pga",
+            },
+        )
+        # Get the fetch_id just inserted
+        row = db.session.execute(
+            text("SELECT id FROM fetches ORDER BY fetched_at DESC LIMIT 1")
+        ).mappings().fetchone()
+        fetch_id = row["id"]
+
+        for player_name, score in players_scores:
+            db.session.execute(
+                text(
+                    "INSERT INTO projections (fetch_id, player_name, projected_score) "
+                    "VALUES (:fid, :pn, :ps)"
+                ),
+                {"fid": fetch_id, "pn": player_name, "ps": score},
+            )
+        db.session.commit()
+
+
+@pytest.fixture()
+def db_client():
+    """Flask test client with DB tables created (for source selector tests)."""
+    from gbgolf.web import create_app
+    from gbgolf.db import db as _db
+    app = create_app()
+    app.config["TESTING"] = True
+    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+    with app.app_context():
+        _db.create_all()
+        with app.test_client() as c:
+            c._app = app  # stash for _seed_projections access
+            yield c
+        _db.drop_all()
+
+
+# ---------------------------------------------------------------------------
+# Phase 10: SRC-01 through SRC-05 -- Projection Source Selector
+# ---------------------------------------------------------------------------
+
+
+def test_source_selector_rendered(db_client):
+    """SRC-01: GET / renders source selector radio buttons."""
+    # Seed DB so Auto is enabled
+    _seed_projections(db_client._app, [("Player A", 72.5)])
+    response = db_client.get("/")
+    assert response.status_code == 200
+    html = response.data.decode("utf-8")
+    assert 'name="source_radio"' in html
+    assert 'value="auto"' in html
+    assert 'value="csv"' in html
+
+
+def test_projection_source_hidden_input(db_client):
+    """SRC-01: GET / renders hidden projection_source input."""
+    response = db_client.get("/")
+    assert response.status_code == 200
+    html = response.data.decode("utf-8")
+    assert 'name="projection_source"' in html
+    assert 'id="projection-source-input"' in html
+
+
+def test_staleness_label_rendered(db_client):
+    """SRC-03: GET / shows tournament name and days ago when projections exist."""
+    _seed_projections(db_client._app, [("Player A", 72.5)], tournament_name="Arnold Palmer Invitational", days_ago=2)
+    response = db_client.get("/")
+    assert response.status_code == 200
+    html = response.data.decode("utf-8")
+    assert "Arnold Palmer Invitational" in html
+    assert "2 days ago" in html
+
+
+def test_auto_disabled_empty_db(db_client):
+    """SRC-04: Auto radio disabled when DB has no projections."""
+    response = db_client.get("/")
+    assert response.status_code == 200
+    html = response.data.decode("utf-8")
+    # Auto radio should be disabled
+    assert "disabled" in html
+    assert "No projections available yet" in html
+    # CSV should be checked by default
+    assert 'value="csv"' in html
+
+
+def test_load_projections_from_db(db_client):
+    """SRC-02: load_projections_from_db returns normalized name -> score dict."""
+    _seed_projections(db_client._app, [("Scottie Scheffler", 72.5), ("Rory McIlroy", 68.3)])
+    from gbgolf.data import load_projections_from_db
+    with db_client._app.app_context():
+        result = load_projections_from_db()
+    assert isinstance(result, dict)
+    assert "scottie scheffler" in result
+    assert "rory mcilroy" in result
+    assert result["scottie scheffler"] == 72.5
+    assert result["rory mcilroy"] == 68.3
+
+
+def test_post_auto_source_uses_db(db_client):
+    """SRC-02: POST with projection_source=auto uses DB projections to generate lineups."""
+    # Seed DB with projections for all 30 _VALID_PLAYERS
+    players_scores = [(p, 72.5) for p, _, _ in _VALID_PLAYERS]
+    _seed_projections(db_client._app, players_scores)
+    response = db_client.post(
+        "/",
+        data={
+            "roster": (io.BytesIO(SAMPLE_ROSTER_CSV.encode("utf-8")), "roster.csv"),
+            "projection_source": "auto",
+        },
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 200
+    html = response.data.decode("utf-8")
+    # Should show lineup results
+    assert "The Tips" in html
+    assert "The Intermediate Tee" in html
+
+
+def test_auto_source_empty_db_error(db_client):
+    """SRC-04: POST with projection_source=auto and empty DB returns error."""
+    response = db_client.post(
+        "/",
+        data={
+            "roster": (io.BytesIO(SAMPLE_ROSTER_CSV.encode("utf-8")), "roster.csv"),
+            "projection_source": "auto",
+        },
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 200
+    html = response.data.decode("utf-8")
+    assert "No projections available" in html
+
+
+def test_auto_source_unmatched_players(db_client):
+    """SRC-05: When using auto source, unmatched roster players appear in exclusion report."""
+    # Seed DB with projections for only a subset of players (not "Unmatched Player")
+    players_scores = [(p, 72.5) for p, _, _ in _VALID_PLAYERS]
+    _seed_projections(db_client._app, players_scores)
+    # Use EXCLUSION_ROSTER_CSV which has "Unmatched Player" with no projection
+    response = db_client.post(
+        "/",
+        data={
+            "roster": (io.BytesIO(EXCLUSION_ROSTER_CSV.encode("utf-8")), "roster.csv"),
+            "projection_source": "auto",
+        },
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 200
+    html = response.data.decode("utf-8")
+    assert "Unmatched Player" in html
+    assert "no projection found" in html
