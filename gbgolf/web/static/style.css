@@ -319,6 +319,30 @@ main {
   display: flex;
   gap: 16px;
   margin-top: 8px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.csv-format-hint {
+  border-left: 1px solid var(--border-2);
+  padding-left: 12px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.7;
+}
+
+.csv-format-hint strong {
+  color: var(--text);
+}
+
+.csv-format-hint code {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+  color: var(--accent);
 }
 
 .source-radio {
