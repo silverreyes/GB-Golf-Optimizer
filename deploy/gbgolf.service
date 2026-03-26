@@ -3,14 +3,14 @@ Description=GB Golf Optimizer (Gunicorn)
 After=network.target
 
 [Service]
-User=<deploy_user>
+User=deploy
 Group=www-data
-WorkingDirectory=/path/to/GBGolfOptimizer
-Environment="PATH=/path/to/GBGolfOptimizer/venv/bin"
+WorkingDirectory=/opt/GBGolfOptimizer
+Environment="PATH=/opt/GBGolfOptimizer/.venv/bin"
 Environment="SCRIPT_NAME=/golf"
-ExecStart=/path/to/GBGolfOptimizer/venv/bin/gunicorn \
+ExecStart=/opt/GBGolfOptimizer/.venv/bin/gunicorn \
     --workers 2 \
-    --bind unix:/path/to/GBGolfOptimizer/gbgolf.sock \
+    --bind unix:/opt/GBGolfOptimizer/gbgolf.sock \
     --umask 007 \
     wsgi:app
 Restart=on-failure

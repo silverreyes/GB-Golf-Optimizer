@@ -18,6 +18,7 @@ tar -czf - \
   --exclude='./venv' \
   --exclude='./.venv' \
   --exclude='./*.sock' \
+  --exclude='./.env' \
   -C "$LOCAL_PATH" . \
   | ssh "$REMOTE" "tar -xzf - -C $REMOTE_PATH"
 
