@@ -1,13 +1,17 @@
 """
 GB Golf Optimizer data layer.
-Public API: validate_pipeline(), load_cards(), load_config()
+Public API: validate_pipeline(), validate_pipeline_auto(), load_cards(), load_config(),
+            load_projections_from_db()
 """
+from sqlalchemy import text
+
 from gbgolf.data.config import load_contest_config, ContestConfig
 from gbgolf.data.filters import apply_filters
 from gbgolf.data.matching import match_projections, normalize_name
 from gbgolf.data.models import Card, ExclusionRecord, ValidationResult
 from gbgolf.data.projections import parse_projections_csv
 from gbgolf.data.roster import parse_roster_csv
+from gbgolf.db import db
 
 
 def load_cards(roster_path: str, projections_path: str) -> tuple[list[Card], list[str]]:
@@ -58,10 +62,61 @@ def validate_pipeline(
     )
 
 
+def load_projections_from_db() -> dict[str, float]:
+    """Load latest projections from DB. Returns {normalized_name: score}.
+
+    Raises ValueError if no projections exist in the database.
+    """
+    row = db.session.execute(
+        text("SELECT id FROM fetches ORDER BY fetched_at DESC LIMIT 1")
+    ).mappings().fetchone()
+    if row is None:
+        raise ValueError("No projections available \u2014 please upload a CSV")
+
+    fetch_id = row["id"]
+    rows = db.session.execute(
+        text("SELECT player_name, projected_score FROM projections WHERE fetch_id = :fid"),
+        {"fid": fetch_id},
+    ).mappings().all()
+
+    return {normalize_name(r["player_name"]): r["projected_score"] for r in rows}
+
+
+def validate_pipeline_auto(roster_path: str, config_path: str) -> ValidationResult:
+    """Validation pipeline using DB projections instead of CSV file.
+
+    Identical to validate_pipeline() except projections come from the database
+    via load_projections_from_db() instead of a CSV file path.
+    """
+    cards = parse_roster_csv(roster_path)
+    projections = load_projections_from_db()
+    enriched = match_projections(cards, projections)
+    contests = load_config(config_path)
+
+    valid_cards, excluded = apply_filters(enriched)
+
+    if contests:
+        min_required = min(c.roster_size for c in contests)
+        if len(valid_cards) < min_required:
+            raise ValueError(
+                f"Only {len(valid_cards)} valid card(s) found \u2014 "
+                f"smallest contest requires at least {min_required}. "
+                f"Check your exclusion report."
+            )
+
+    return ValidationResult(
+        valid_cards=valid_cards,
+        excluded=excluded,
+        projection_warnings=[],
+    )
+
+
 __all__ = [
     "validate_pipeline",
+    "validate_pipeline_auto",
     "load_cards",
     "load_config",
+    "load_projections_from_db",
     "Card",
     "ContestConfig",
     "ExclusionRecord",
