@@ -31,15 +31,15 @@ Declared values (derived from existing `style.css` patterns, multiples of 4):
 
 | Token | Value | Usage |
 |-------|-------|-------|
-| xs | 4px | Inline radio-to-label gap (0.25rem) |
-| sm | 8px | Compact element spacing, radio group internal gap |
-| md | 16px | Default element spacing, form padding |
+| xs | 4px | Inline radio-to-label gap (0.25rem), staleness label top margin |
+| sm | 8px | Compact element spacing, source-selector top margin |
+| md | 16px | Default element spacing, form padding, source-selector flex gap |
 | lg | 24px | Section padding (form inner padding is 1.5rem = 24px) |
 | xl | 32px | Layout gaps |
 | 2xl | 48px | Major section breaks |
 | 3xl | 64px | Page-level spacing |
 
-Exceptions: Radio group gap uses 20px (1.2rem) to match the `.source-selector` flex gap specified in RESEARCH.md. This is the only non-scale value, justified by the tight horizontal layout of two radio options.
+Exceptions: none -- all values are strict multiples of 4 from the standard set.
 
 ---
 
@@ -52,12 +52,12 @@ All values match existing stylesheet. No new type styles are introduced.
 | Body | 14px (0.86rem) | 400 | 1.5 | Prompt (--font-body) |
 | Form heading | 10px (0.62rem) | 700 | 1.5 | JetBrains Mono (--font-mono) |
 | Radio label | 12px (0.75rem) | 400 | 1.5 | JetBrains Mono (--font-mono) |
-| Staleness label | 10.4px (0.65rem) | 400 | 1.5 | JetBrains Mono (--font-mono) |
+| Staleness label | 10px (0.62rem) | 400 | 1.5 | JetBrains Mono (--font-mono) |
 
 Sources:
 - Form heading: existing `.form-row-heading` uses `0.62rem / 700 / --font-mono`
 - Radio label: RESEARCH.md CSS example specifies `0.75rem / --font-mono`
-- Staleness label: RESEARCH.md CSS example specifies `0.65rem / --font-mono`
+- Staleness label: aligned to 10px (0.62rem) to match form heading size; the original 0.65rem (10.4px) was only 0.4px different and visually indistinguishable. Using the same 0.62rem value as form headings gives a consistent small-text tier.
 
 ---
 
@@ -95,6 +95,10 @@ Accent reserved for: Generate Lineups submit button, file upload zone border, ch
 
 ## Component Inventory
 
+### Visual Hierarchy
+
+Visual anchor: the radio row (`.source-selector`) is the primary new interactive element and anchors the user's eye within the source selector block. The staleness label is secondary informational text, rendered at smaller size and muted weight to recede behind the radio options.
+
 ### Source Selector Row
 
 New `.form-row` at the top of the `<details id="upload-section">` form, before the Roster CSV row.
@@ -119,8 +123,8 @@ New `.form-row` at the top of the `<details id="upload-section">` form, before t
 ```css
 .source-selector {
   display: flex;
-  gap: 1.2rem;
-  margin-top: 0.4rem;
+  gap: 16px;
+  margin-top: 8px;
 }
 
 .source-radio {
@@ -130,7 +134,7 @@ New `.form-row` at the top of the `<details id="upload-section">` form, before t
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 4px;
 }
 
 .source-radio:has(input[disabled]) {
@@ -140,9 +144,9 @@ New `.form-row` at the top of the `<details id="upload-section">` form, before t
 
 .staleness-label {
   font-family: var(--font-mono);
-  font-size: 0.65rem;
+  font-size: 0.62rem;
   color: var(--text);
-  margin-top: 0.3rem;
+  margin-top: 4px;
 }
 
 .staleness-label.stale {
