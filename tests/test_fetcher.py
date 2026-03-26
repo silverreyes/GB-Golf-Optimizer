@@ -203,6 +203,52 @@ def test_write_projections_idempotent(db_session):
 
 
 # ---------------------------------------------------------------------------
+# Dialect-conditional PRAGMA tests (PostgreSQL safety)
+# ---------------------------------------------------------------------------
+
+def test_write_projections_skips_pragma_on_non_sqlite(db_session, monkeypatch):
+    """PRAGMA foreign_keys = ON is NOT sent when dialect is not sqlite."""
+    executed_statements = []
+    original_execute = db_session.execute
+
+    def tracking_execute(stmt, *args, **kwargs):
+        if hasattr(stmt, 'text'):
+            executed_statements.append(stmt.text)
+        return original_execute(stmt, *args, **kwargs)
+
+    # SQLite requires explicit FK enforcement (tests use in-memory SQLite)
+    db_session.execute(text("PRAGMA foreign_keys = ON"))
+
+    # Fake a non-sqlite dialect
+    class FakeBind:
+        class dialect:
+            name = "postgresql"
+    monkeypatch.setattr(db_session, "bind", FakeBind())
+
+    # Patch execute to track statements (restore real bind for actual execution)
+    real_bind = db_session.get_bind()
+
+    def patched_execute(stmt, *args, **kwargs):
+        if hasattr(stmt, 'text'):
+            executed_statements.append(stmt.text)
+        # Restore real bind for actual DB work
+        monkeypatch.setattr(db_session, "bind", real_bind)
+        result = original_execute(stmt, *args, **kwargs)
+        # Re-fake the bind for any subsequent dialect checks
+        monkeypatch.setattr(db_session, "bind", FakeBind())
+        return result
+
+    monkeypatch.setattr(db_session, "execute", patched_execute)
+
+    players = [{"player_name": "Test Player", "projected_score": 70.0}]
+    write_projections(db_session, "Dialect Test", "pga", players)
+
+    # PRAGMA should NOT appear in executed statements (dialect was "postgresql")
+    pragma_calls = [s for s in executed_statements if "PRAGMA" in s]
+    assert pragma_calls == [], f"PRAGMA was sent on non-sqlite dialect: {pragma_calls}"
+
+
+# ---------------------------------------------------------------------------
 # run_fetch tests (integration, mocked httpx)
 # ---------------------------------------------------------------------------
 
