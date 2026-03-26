@@ -78,10 +78,11 @@ Each task was committed atomically:
 
 ## Deviations from Plan
 
-None - plan executed exactly as written.
+- **deploy.sh .env exclusion added** — not in the original plan. During deployment it was discovered that deploy.sh was syncing the local `.env` file (which contains `DATABASE_URL=sqlite:///gbgolf.db`) to the VPS on every run, silently overwriting the production `.env` with development values. This wiped the real `DATABASE_URL`, `SECRET_KEY`, and `DATAGOLF_API_KEY` each deploy, causing SQLite connections and 500 errors in production. Fix applied: added `--exclude='./.env'` to the tar command in deploy.sh (line 21). The production `.env` on the VPS is now treated as persistent production config — managed manually and never touched by deployments.
 
 ## Issues Encountered
-None.
+
+- **Production .env overwritten by deploy** — Root cause: `sample.env` values in local `.env` were syncing to VPS via tar. Symptom: `sqlalchemy.exc.OperationalError: no such table: fetches` and 500 errors on page load after deploy. Resolution: `--exclude='./.env'` added to deploy.sh. Production `.env` restored manually with correct PostgreSQL `DATABASE_URL`, `DATAGOLF_API_KEY`, and generated `SECRET_KEY`.
 
 ## User Setup Required
 None - deployment was completed by the human during the verification checkpoint.
