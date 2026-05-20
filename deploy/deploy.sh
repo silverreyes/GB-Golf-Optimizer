@@ -22,6 +22,13 @@ tar -czf - \
   -C "$LOCAL_PATH" . \
   | ssh "$REMOTE" "tar -xzf - -C $REMOTE_PATH"
 
+echo "Installing dependencies..."
+# Installs the project + its pyproject.toml dependencies into the venv so new
+# deps reach production. Idempotent: a no-op when nothing changed (~few seconds).
+# Runs before migrate/restart so that on failure (set -e) the old service keeps
+# running on the previous code rather than restarting against missing deps.
+ssh "$REMOTE" "cd $REMOTE_PATH && .venv/bin/pip install -e . --quiet"
+
 echo "Running database migration..."
 ssh "$REMOTE" "cd $REMOTE_PATH && FLASK_APP=gbgolf.web:create_app .venv/bin/flask db upgrade"
 

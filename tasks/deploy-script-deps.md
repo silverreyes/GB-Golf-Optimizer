@@ -1,5 +1,21 @@
 # Backlog: deploy.sh does not install Python dependencies
 
+## Status: RESOLVED (2026-05-20)
+
+Fix landed in `deploy/deploy.sh` — an "Installing dependencies..." step running
+`.venv/bin/pip install -e . --quiet` was added between the tar sync and the
+migration (Option from the Fix section below). Validated on the VPS: ran the
+pip step directly against the production venv and confirmed a clean exit
+(`INSTALL_OK`) — a no-op since deps were already satisfied. The original
+manual-install workaround for `markdown` is no longer needed; future
+`pyproject.toml` dependency additions reach the prod venv automatically on the
+next deploy.
+
+The rest of this file is retained as the historical record of the problem and
+the decision.
+
+---
+
 ## Context
 
 `deploy/deploy.sh` syncs files, runs `flask db upgrade`, and restarts the gunicorn service. It does **not** install Python dependencies. Any new entry added to `pyproject.toml`'s `dependencies` array reaches production code but not the production venv, causing a `ModuleNotFoundError` at the first request that imports the new package.
