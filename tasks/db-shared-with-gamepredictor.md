@@ -1,5 +1,35 @@
 # Backlog: GBGolf shares its Postgres with the GamePredictor stack
 
+## Status: RESOLVED (2026-05-20)
+
+Decoupled via Option A. GBGolf now has a dedicated Postgres:
+
+- `docker-compose.yml` added at the repo root → deployed to `/opt/GBGolfOptimizer/`.
+  Stack `gbgolfoptimizer`: container `gbgolfoptimizer-db-1` (`postgres:16-alpine`,
+  `restart: unless-stopped`), network `gbgolfoptimizer_default`, volume
+  `gbgolfoptimizer_pgdata`, bound `127.0.0.1:5437` (host-local only; the host
+  gunicorn connects over it).
+- Data migrated with `pg_dump` from `gamepredictor-postgres-1` (gbgolf db:
+  `fetches`=9, `projections`=959, alembic head `b7c4e9f12a03`). Backup retained
+  on VPS at `/home/deploy/gbgolf-migration-20260520.sql`.
+- `.env` `DATABASE_URL` repointed from `@172.18.0.2:5432` to `@127.0.0.1:5437`
+  (same gbgolf credentials reused; `.env` backed up at `.env.bak-20260520`,
+  chmod 600). `POSTGRES_USER/PASSWORD/DB` added for Compose.
+- gbgolf service restarted; home page verified 200; app's live connection
+  confirmed landing on the new container.
+- VPS_STATE.md updated (port-table row for 5437, dated §13 entry, next-available
+  port bumped to 5438).
+
+**Deferred cleanup:** the `gbgolf` database + role still exist inside
+`gamepredictor-postgres-1` as a fallback. Drop them once the dedicated container
+is confirmed stable (give it a few days / one projection cron cycle). Tracked in
+VPS_STATE.md §13.
+
+The rest of this file is retained as the historical record of the problem and
+the decision.
+
+---
+
 ## Context
 
 GBGolf's production `DATABASE_URL` (in `/opt/GBGolfOptimizer/.env` on the VPS) points at:

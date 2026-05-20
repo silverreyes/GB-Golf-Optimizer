@@ -1,0 +1,32 @@
+# Dedicated PostgreSQL for GB Golf Optimizer.
+#
+# The optimizer app itself runs as a host-level gunicorn systemd service
+# (not in Docker) and connects to this database over a host-local port.
+# This stack exists only to give GBGolf its own Postgres rather than
+# borrowing the gamepredictor stack's instance (see
+# tasks/db-shared-with-gamepredictor.md for the why).
+#
+# Conventions (VPS_STATE.md §11): postgres:16-alpine, no container_name /
+# volume / network overrides, credentials supplied from the chmod-600 .env
+# (POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB), Postgres bound to
+# 127.0.0.1 only — never 0.0.0.0 — since only the host gunicorn needs it.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "127.0.0.1:5437:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
