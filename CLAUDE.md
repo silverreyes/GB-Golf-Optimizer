@@ -37,7 +37,7 @@ Stay on phase. Do not build ahead.
 - `tasks/todo.md` — decisions log and task history
 - `tasks/lessons.md` — rules from past corrections (this project)
 - `E:\ClaudeCodeProjects\knowledge-base\LESSONS.md` — cross-project rules
-- Memory file (auto-loaded from `~/.claude/projects/`)
+- `docs/agent-memory/` — this project's accumulated memory (state, handoffs, gotchas), migrated from Claude native memory; start with `docs/agent-memory/MEMORY.md`.
 
 <!-- FOR SPORTS PREDICTION PROJECTS: Add these lines:
 - `../knowledge-base/LESSONS.md` — sports prediction domain rules
