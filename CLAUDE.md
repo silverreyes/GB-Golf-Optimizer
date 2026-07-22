@@ -33,6 +33,7 @@ Stay on phase. Do not build ahead.
 -->
 
 **Start every session by reading:**
+- **AI Knowledge Base** — `E:\KnowledgeBase\AIKB` (WSL `/mnt/e/KnowledgeBase/AIKB`): read `meta/agent-bootstrap.md`, then `memory/profile.md`, then relevant `global/` notes (and `domains/sports-prediction/` for sports projects).
 - `tasks/todo.md` — decisions log and task history
 - `tasks/lessons.md` — rules from past corrections (this project)
 - `E:\ClaudeCodeProjects\knowledge-base\LESSONS.md` — cross-project rules
@@ -159,4 +160,4 @@ This project contributes to and reads from the shared knowledge base system:
 
 **Commands:**
 - `/curate` — Extract generalizable learnings (run after lessons.md updates)
-- `/extract-final` — End-of-project comprehensive extraction
+- `/checkpoint` — End of conversation and handoff to continue in new conversation
