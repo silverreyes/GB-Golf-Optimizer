@@ -36,12 +36,9 @@ Stay on phase. Do not build ahead.
 - **AI Knowledge Base** — `E:\KnowledgeBase\AIKB` (WSL `/mnt/e/KnowledgeBase/AIKB`): read `meta/agent-bootstrap.md`, then `memory/profile.md`, then relevant `global/` notes (and `domains/sports-prediction/` for sports projects).
 - `tasks/todo.md` — decisions log and task history
 - `tasks/lessons.md` — rules from past corrections (this project)
-- `E:\ClaudeCodeProjects\knowledge-base\LESSONS.md` — cross-project rules
 - `docs/agent-memory/` — this project's accumulated memory (state, handoffs, gotchas), migrated from Claude native memory; start with `docs/agent-memory/MEMORY.md`.
 
 <!-- FOR SPORTS PREDICTION PROJECTS: Add these lines:
-- `../knowledge-base/LESSONS.md` — sports prediction domain rules
-- `../knowledge-base/PATTERNS.md` — sports prediction patterns
 -->
 
 ## Database State
@@ -154,8 +151,8 @@ This project contributes to and reads from the shared knowledge base system:
 
 | Tier | Location | Contents |
 |---|---|---|
-| Global | `E:\ClaudeCodeProjects\knowledge-base\` | Cross-project patterns, deployment, stack |
-| Domain | `E:\ClaudeCodeProjects\Sports-Prediction-API\knowledge-base\` | Sports prediction specific (if applicable) |
+| Global | `E:\KnowledgeBase\AIKB\global\` | Cross-project patterns, deployment, stack |
+| Domain | `E:\KnowledgeBase\AIKB\domains\sports-prediction\` | Sports prediction specific (if applicable) |
 | Project | `tasks/lessons.md` | This project only |
 
 **Commands:**
