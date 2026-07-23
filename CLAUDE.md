@@ -37,6 +37,8 @@ Stay on phase. Do not build ahead.
 - `tasks/todo.md` — decisions log and task history
 - `tasks/lessons.md` — rules from past corrections (this project)
 - `docs/agent-memory/` — this project's accumulated memory (state, handoffs, gotchas), migrated from Claude native memory; start with `docs/agent-memory/MEMORY.md`.
+- Orchestrated work runs the **Head Coach** protocol: `AIKB/global/head-coach.md`
+  (vault: E:\KnowledgeBase\AIKB = /mnt/e/KnowledgeBase/AIKB).
 
 <!-- FOR SPORTS PREDICTION PROJECTS: Add these lines:
 -->
