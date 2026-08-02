@@ -32,13 +32,20 @@ Stay on phase. Do not build ahead.
 - VPS deploy status
 -->
 
+**Canonical checkout:** WSL `/home/silver/projects/GB-Golf-Optimizer`. Any other
+copy is non-canonical — the old `E:\Projects\GB-Golf-Optimizer` was archived
+2026-08-02 under `E:\Projects\_archive\` (restore-from only). The vault's
+`projects/_index.md` "Repos — where the code lives" table is the one owning
+record of per-repo canonicity; read it there, never restate it here.
+
 **Start every session by reading:**
 - **AI Knowledge Base** — `E:\KnowledgeBase\AIKB` (WSL `/mnt/e/KnowledgeBase/AIKB`): read `meta/agent-bootstrap.md`, then `memory/profile.md`, then relevant `global/` notes (and `domains/sports-prediction/` for sports projects).
 - `tasks/todo.md` — decisions log and task history
 - `tasks/lessons.md` — rules from past corrections (this project)
 - `docs/agent-memory/` — this project's accumulated memory (state, handoffs, gotchas), migrated from Claude native memory; start with `docs/agent-memory/MEMORY.md`.
 - Orchestrated work runs the **Head Coach** protocol: `AIKB/global/head-coach.md`
-  (vault: E:\KnowledgeBase\AIKB = /mnt/e/KnowledgeBase/AIKB).
+  (vault: E:\KnowledgeBase\AIKB = /mnt/e/KnowledgeBase/AIKB), with protocol/seat
+  case law in `AIKB/global/head-coach-lessons.md`.
 
 <!-- FOR SPORTS PREDICTION PROJECTS: Add these lines:
 -->
@@ -153,9 +160,17 @@ This project contributes to and reads from the shared knowledge base system:
 
 | Tier | Location | Contents |
 |---|---|---|
-| Global | `E:\KnowledgeBase\AIKB\global\` | Cross-project patterns, deployment, stack |
-| Domain | `E:\KnowledgeBase\AIKB\domains\sports-prediction\` | Sports prediction specific (if applicable) |
-| Project | `tasks/lessons.md` | This project only |
+| Global | `AIKB/global/` — genre folders `lessons/`, `gotchas/`, `patterns/` (each with its own `_index.md`), plus `deployment.md`, `stack.md`, `head-coach-lessons.md` | Cross-project lessons, gotchas, patterns, deployment, stack |
+| Domain | `AIKB/domains/sports-prediction/` | Sports prediction specific, including sports-ML entries (if applicable) |
+| Runbooks | `AIKB/runbooks/` | Operator procedures (multi-instance Claude Desktop, WSL projects backup) |
+| Project | `tasks/lessons.md` (working state stays in this repo) · `AIKB/projects/` for filed reports and evidence | This project only |
+
+The old `global/lessons.md` / `gotchas.md` / `patterns.md` monoliths are retired.
+Search the genre folders instead: `grep -ri <term> global/lessons/`.
+
+**Filing into the vault:** obey the six intake gates in `meta/curate.md`, the
+projects-tier filing rule in `projects/_index.md`, and each genre folder's
+`_index.md` for the global tier.
 
 **Commands:**
 - `/curate` — Extract generalizable learnings (run after lessons.md updates)
