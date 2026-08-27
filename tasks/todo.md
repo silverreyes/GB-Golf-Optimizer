@@ -5,6 +5,54 @@ Decisions log and task history. Follow the workflow in `CLAUDE.md` (research
 
 ---
 
+## 2026-08-26 — Offseason shutdown (golf `/golf` only)
+
+Scoped errand under the Head Coach protocol (not part of the M0 gameplan below,
+which stays unstarted). Gameblazers shut golf down for the NFL season (Owner
+ruling 2 of 2026-08-04); the Owner ruled the golf surface offline for the
+offseason, returning at the 2027 season restart. Plan approved by the Owner as
+presented; each production-modifying command took its own approval.
+
+**Baseline corrections found at grounding** (stale premises re-measured):
+- **TLS already renewed.** Live cert is Aug 22 → **Nov 20 2026** (read from the
+  public TLS handshake), not the 2026-09-20 in the scouting report — the snap
+  `certbot.renew.timer` auto-renewed on schedule. Renewal automation is
+  demonstrably working.
+- **Shared vhost.** `gameblazers.silverreyes.net` serves `/golf` (this app) **and
+  `/nfl/` → GBNFLOptimizer, a separate live project** (added 2026-08-14), under
+  one shared Certbot cert. Shutdown was scoped to the `/golf` block only; `/nfl/`,
+  the port-80 block, and the shared cert were left byte-identical.
+- **Shared crontab.** The golf `fetch-projections` lines share the deploy crontab
+  with NFL-odds, chalkbook, and GBNFL-backup jobs; only the three golf lines were
+  paused.
+
+**What was done:**
+- Static placeholder `deploy/offseason.html` (HTTP 200, "offseason, returns in
+  2027"); nginx `/golf` block edited to serve it; `gbgolf.service` stopped and
+  disabled.
+- Return-to-service runbook `deploy/RETURN-TO-SERVICE.md`: DataGolf API-key
+  validity check first (paid yearly — a lapse must not be a restart-day outage),
+  nginx restore, service start, cron re-enable, the deferred contest-config
+  decision, smoke checks.
+- Golf projection cron paused (3 lines commented with a dated OFFSEASON marker +
+  restart trigger); dated crontab backup receipt kept on the VPS.
+- TLS renewal verified to survive the placeholder change via `certbot renew
+  --dry-run`.
+
+**DB container decision (Owner-ruled): `gbgolfoptimizer-db-1` stays running.**
+Reasoning: idle `postgres:16-alpine` costs negligible RAM/CPU with the app
+stopped and nothing querying it; stopping it saves almost nothing while adding a
+restore step at restart and, more consequentially, putting a `docker compose
+stop/down` next to the **one-character-apart** `gbnfloptimizer-db-1` container and
+`gbnfloptimizer_pgdata` volume that VPS_STATE flags as a destructive-command
+hazard. Leaving it running preserves the projection data at zero handling risk.
+
+**Records:** `GBGolfOptimizer_VPS_STATE.md` change log + `/home/deploy/VPS_STATE.md`
+(shared nginx/cron changes). The credential rule held throughout — the DataGolf
+key is referenced by name only, never read.
+
+---
+
 ## 2026-08-04 — Scouting report ratified; first milestone (M0) gameplan
 
 **Owner-ratified scouting report:** `AIKB/projects/GB-Golf-Optimizer/scouting-report-2026-08-04.md`
