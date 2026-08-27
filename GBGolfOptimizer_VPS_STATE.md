@@ -34,7 +34,7 @@ volumes, credentials locations, or cross-project cleanup.
 
 | Item | Value |
 |---|---|
-| Status | Running |
+| Status | **Offseason (2026-08-26)** — `/golf` serves a static placeholder; `gbgolf.service` stopped + disabled; projection cron paused. DB container left running. Returns 2027 — see `deploy/RETURN-TO-SERVICE.md`. |
 | Local canonical file | `E:\ClaudeCodeProjects\GBGolfOptimizer\GBGolfOptimizer_VPS_STATE.md` |
 | Local repo | `E:\ClaudeCodeProjects\GBGolfOptimizer` |
 | VPS path | `/opt/GBGolfOptimizer` |
@@ -67,6 +67,12 @@ The deploy user's crontab runs `fetch-projections` from `/opt/GBGolfOptimizer`:
 - Wed/Thu at 00:00 UTC.
 - Wed/Thu at 02:00 UTC.
 
+**PAUSED 2026-08-26 (offseason).** All three lines are commented out with a dated
+`OFFSEASON` marker; re-enable at the 2027 golf season restart (`deploy/RETURN-TO-SERVICE.md`,
+Step 3). Pre-pause crontab backup: `/home/deploy/crontab-backup-offseason-20260826.txt`.
+The crontab is shared — the NFL-odds, chalkbook, and GBNFLOptimizer-backup lines
+were left untouched.
+
 Because this is host cron, changes to this schedule should be reflected in both
 this file and `/home/deploy/VPS_STATE.md`.
 
@@ -88,6 +94,45 @@ Condensed history:
   verification.
 
 ## Change Log
+
+### 2026-08-26 UTC — golf taken offseason (static placeholder; app + cron stopped)
+
+- Actor/session: Claude (Opus 4.8), user NatoJenkins — offseason-shutdown errand
+  under the Head Coach protocol. Each production command took its own Owner
+  approval; sudo commands were Owner-run.
+- Reason: Gameblazers shut its golf game down for the NFL season (Owner ruling,
+  scouting report addendum 2026-08-04, ruling 2). The Owner ruled `/golf` offline
+  for the offseason, returning at the 2027 season restart.
+- Change summary:
+  - `/golf` nginx block swapped from `proxy_pass` (Gunicorn socket) to a static
+    HTTP-200 placeholder (`root /opt/GBGolfOptimizer; try_files /offseason.html`).
+    Placeholder file: `/opt/GBGolfOptimizer/offseason.html` (md5 `8a11c841…`,
+    tracked in repo at `deploy/offseason.html`).
+  - `gbgolf.service` stopped and **disabled** (survives host reboot).
+  - Projection cron paused (3 golf lines commented; see Host Cron above).
+  - **DB container `gbgolfoptimizer-db-1` left running** (Owner decision) — idle
+    cost is negligible; stopping it saves little while risking a `docker` command
+    next to the one-character-apart `gbnfloptimizer-db-1` / `gbnfloptimizer_pgdata`
+    and adding a restore step. Data preserved intact.
+- VPS resources touched:
+  - `/etc/nginx/sites-enabled/gameblazers.silverreyes.net` — **only** the `/golf`
+    location block. `/nfl/` (GBNFLOptimizer, live), the port-80 block, and the
+    shared TLS lines left byte-identical. Backup:
+    `/etc/nginx/gameblazers.silverreyes.net.bak-offseason-20260826`.
+  - deploy-user crontab (3 golf lines). Backup:
+    `/home/deploy/crontab-backup-offseason-20260826.txt`.
+  - `systemd` unit `gbgolf.service` disabled.
+- Validation performed:
+  - `nginx -t` passed; `/golf` and `/golf/changelog` return HTTP 200 `text/html`
+    placeholder with the app fully down and the socket removed; `/nfl/` still 200.
+  - `sudo certbot renew --dry-run`: `gameblazers.silverreyes.net (success)` —
+    **TLS renewal survives the placeholder change.** (The live cert had already
+    auto-renewed to 2026-11-20 via the snap certbot timer; the scouting report's
+    2026-09-20 expiry was stale.) Unrelated pre-existing failures for
+    `mlbforecaster`/`nostradamus` (NXDOMAIN) flagged to the Owner, out of scope.
+- Rollback/return-to-service: `deploy/RETURN-TO-SERVICE.md` (DataGolf key check
+  first, nginx restore, service start, cron re-enable, contest-config decision).
+- Global impact: `/home/deploy/VPS_STATE.md` updated (nginx + cron are shared).
 
 ### 2026-06-22 ~23:15 UTC — gameblazers TLS moved off broken wildcard
 
