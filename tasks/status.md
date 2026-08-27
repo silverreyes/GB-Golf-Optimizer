@@ -10,7 +10,7 @@
 - **Line:** Next drive would build the ratified M0 gameplan (test-fixture, CI, docs, lock fixes)
 - **Until:** n/a
 - **Phase:** v1.2.2 live since 2026-04-29; infra hardening done through 2026-06-22; M0 gameplan ratified 2026-08-04, unstarted
-- **Next:** Start the M0 gameplan ratified 2026-08-04 (tasks/todo.md): fix the self-expiring test fixture in tests/conftest.py (M0.1), add a CI workflow running the suite on push and PR (M0.2), document the contest-config swap mechanism and seasonal rhythm and pause the DataGolf cron for the offseason (M0.3), correct CLAUDE.md's pin rule and Python floor (M0.4), run the records-consistency sweep (M0.5), fix the lock-eviction defect and correct its docstrings (M0.6), and add Postgres env var names to .env.example (M0.7). Separately, two VPS follow-ups logged 2026-06-22 in GBGolfOptimizer_VPS_STATE.md are overdue and unverified against the live VPS: sync the stale nginx sites-available copy to sites-enabled (routine, no sign-off needed), and get Silver's sign-off before dropping the old gbgolf database and role left inside the retired gamepredictor-postgres-1 container (destructive per CLAUDE.md's rule).
+- **Next:** Start the ratified M0 gameplan (seven fixes: fixture, CI, docs/pins, records sweep, lock-eviction, env vars). Then two overdue VPS items: sync nginx config, get sign-off before dropping the retired gbgolf DB. Checklist in tasks/todo.md.
 - **Updated:** 2026-08-26
 
 <!-- Everything below this line is archive: no value is ever taken from down
