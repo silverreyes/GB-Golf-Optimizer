@@ -5,12 +5,12 @@
      at the first blank line. Bump Updated: whenever any other value changes.
      Validate with: python3 /mnt/e/KnowledgeBase/AIKB/scripts/status_contract.py tasks/status.md --mode shape -->
 
-- **Deployment:** live
-- **State:** between-drives
-- **Line:** Next drive would build the ratified M0 gameplan (test-fixture, CI, docs, lock fixes)
-- **Until:** n/a
-- **Phase:** v1.2.2 live since 2026-04-29; infra hardening done through 2026-06-22; M0 gameplan ratified 2026-08-04, unstarted
-- **Next:** Start the ratified M0 gameplan (seven fixes: fixture, CI, docs/pins, records sweep, lock-eviction, env vars). Then two overdue VPS items: sync nginx config, get sign-off before dropping the retired gbgolf DB. Checklist in tasks/todo.md.
+- **Deployment:** retired
+- **State:** parked
+- **Line:** Golf offline for the NFL-season offseason; revisit Feb 2027 as the new season nears
+- **Until:** 2027-02-01
+- **Phase:** Offseason since 2026-08-26 — /golf is a static placeholder, app+cron stopped; M0 gameplan ratified 2026-08-04, unstarted
+- **Next:** At the Feb 2027 revisit, bring golf back per deploy/RETURN-TO-SERVICE.md (verify DataGolf key, restore service, re-enable cron), then start the M0 gameplan.
 - **Updated:** 2026-08-26
 
 <!-- Everything below this line is archive: no value is ever taken from down
